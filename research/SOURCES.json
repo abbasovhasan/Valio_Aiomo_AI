@@ -1,0 +1,30 @@
+{
+  "review_date": "2026-11-14",
+  "dataset_use": "Synthetic challenge data. The portal restricts use to this challenge. Keep dataset terms separate from the project code license.",
+  "files": [
+    {
+      "path": "data/raw/valio_aimo_junction26_product_data.json",
+      "url": "https://junction26.valioaimo.fi/files/32825daf25fcd6023c3b43028cf0b191/valio_aimo_junction26_product_data.json",
+      "bytes": 87077467,
+      "sha256": "50651aae31ca842112afdc16fcce92f9858d7f5d05e9928a3748aef16b22ea02"
+    },
+    {
+      "path": "data/raw/valio_aimo_junction26_product_data_schema.json",
+      "url": "https://junction26.valioaimo.fi/files/008f9a50ba9a6538d2e5bdf29d592af8/valio_aimo_junction26_product_data_schema.json",
+      "bytes": 30228,
+      "sha256": "d99239e689c24ff1d524dc16bd4c1ac081c2690dd952e7dcd72472f66fe7d3c6"
+    },
+    {
+      "path": "data/raw/valio_aimo_junction26_delivery_reliability.csv",
+      "url": "https://junction26.valioaimo.fi/files/fc0b960c5db8a49fb3b85e02a7f70b78/valio_aimo_junction26_delivery_reliability.csv",
+      "bytes": 56741,
+      "sha256": "d24dc9e17d2652e7c21ea39fcf08e55522d044313031af1d9f3424fb84b2bb72"
+    },
+    {
+      "path": "data/raw/valio_aimo_junction26_carbon_footprint.csv",
+      "url": "https://junction26.valioaimo.fi/files/6d3b5d4ee6de9b5153b70beb27812efe/valio_aimo_junction26_carbon_footprint.csv",
+      "bytes": 156990,
+      "sha256": "72b1ed6a22a0a40dcb7969d0c1f21229cdb5b64b5dba68b7db7fc7e947376eac"
+    }
+  ]
+}

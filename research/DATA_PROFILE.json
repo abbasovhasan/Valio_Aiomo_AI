@@ -1,0 +1,90 @@
+{
+  "review_date": "2026-11-14",
+  "scope": "Static challenge data only; API runtime behavior has not been tested.",
+  "catalog": {
+    "rows": 17546,
+    "unique_product_ids": 17546,
+    "duplicate_product_ids": 0,
+    "unique_vendor_names": 648,
+    "unique_category_codes": 349,
+    "sales_unit_counts": {
+      "RAS": 328,
+      "SK": 120,
+      "ST": 5607,
+      "KI": 8005,
+      "PAK": 880,
+      "BAG": 697,
+      "KRT": 48,
+      "KG": 1068,
+      "PRK": 320,
+      "BOT": 310,
+      "NIP": 3,
+      "CS": 72,
+      "PAL": 4,
+      "DSP": 3,
+      "KAN": 13,
+      "DZ": 2,
+      "KLE": 66
+    },
+    "base_unit_differs_from_sales_unit": 6622,
+    "products_with_deposits": 506,
+    "products_with_substitution_rules": 189,
+    "substitution_edges": 250,
+    "substitution_targets_outside_catalog": 0,
+    "nonempty_synkka_fields": {
+      "names": 17546,
+      "classifications": 17535,
+      "keyIngredients": 14047,
+      "unitConversions": 14474,
+      "nutritionalContent": 12251,
+      "medias": 13375
+    },
+    "products_with_name_in_language": {
+      "en": 17544,
+      "fi": 17546,
+      "sv": 16100
+    },
+    "products_with_nonempty_classification": {
+      "allergen": 7205,
+      "nonAllergen": 5119,
+      "nutritionalClaim": 7618,
+      "packagingMarkedLabel": 17255
+    }
+  },
+  "delivery_reliability": {
+    "file": "valio_aimo_junction26_delivery_reliability.csv",
+    "value_column": "deliveryReliability",
+    "rows": 4425,
+    "unique_product_ids": 4425,
+    "duplicate_product_ids": 0,
+    "matched_catalog_products": 4425,
+    "orphan_product_ids": 0,
+    "missing_catalog_products": 13121,
+    "catalog_coverage_percent": 25.22,
+    "minimum": 0.0,
+    "maximum": 1.0,
+    "median": 1.0
+  },
+  "carbon_footprint": {
+    "file": "valio_aimo_junction26_carbon_footprint.csv",
+    "value_column": "AVG kg CO2-eq/kg",
+    "rows": 11033,
+    "unique_product_ids": 11033,
+    "duplicate_product_ids": 0,
+    "matched_catalog_products": 11033,
+    "orphan_product_ids": 0,
+    "missing_catalog_products": 6513,
+    "catalog_coverage_percent": 62.88,
+    "minimum": 0.13,
+    "maximum": 30.46,
+    "median": 2.11
+  },
+  "interpretation": [
+    "Join catalog id to CSV productId and API productId as strings.",
+    "Missing classification entries are not proof that an allergen is absent.",
+    "Reliability measures historical delivered quantity versus ordered quantity, not an on-time delivery probability.",
+    "Carbon numbers are product-group averages per kilogram, not individual-product measurements.",
+    "Packaging metadata and unit-code translations are incomplete. Do not guess unsupported conversions.",
+    "Synthetic data is restricted to the challenge; it does not establish real product safety or actual commercial offers."
+  ]
+}

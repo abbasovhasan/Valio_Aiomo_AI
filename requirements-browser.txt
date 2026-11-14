@@ -1,0 +1,2 @@
+# Optional development-only browser verification. Never needed by the server.
+playwright==1.65.2

@@ -78,7 +78,7 @@ The gateway agent separately exercised the same client against an isolated serve
 ### Invariant and real database verification
 
 ```bash
-AIMO_STORAGE=sqlite .venv/bin/python -m pytest -q tests/test_gateway.py
+.venv/bin/python -m pytest -q
 .venv/bin/python scripts/backend_postgres_check.py
 ```
 

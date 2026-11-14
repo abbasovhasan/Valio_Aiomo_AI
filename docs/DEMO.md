@@ -1,6 +1,21 @@
-# Aimo Order Desk demo
+# A4TB · Valio Aimo — demonstration
 
-Status: local review script. Junction entry must remain Draft. Every order in this demonstration is simulated. A video has not been recorded or uploaded.
+Open **[A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site)** and sign in with the private buyer code. The public Sites entry point proxies the code-gated application on Modal; the source remains private. Do not put credentials into the URL or share them publicly. Every confirmation is a simulated order.
+
+1. Choose **Stock the breakfast kitchen**, then **Build my cart** in explicitly labelled rehearsal mode. Inspect selected SKUs, quantities, whole-pack surplus, subtotal and source.
+2. Enter **Reduce the butter to 5 kg**. Milk and cheese remain selected. Set a very small budget to see the hard conflict; explicitly increase it to continue. Product search can find other catalog options while preserving diet/origin constraints.
+3. Review and confirm the simulated order. **Verify receipt** checks the saved simulator record. Reload to recover the same order. No supplier purchase, invoice or payment occurs.
+4. Open **Meal planner**. Build the editable 500-diner plan; inspect the four dietary groups and origin evidence. Choose products, set date and **Quote this shopping plan**. Smart order preserves the recipe and choices; missing product claims/conversions block checkout. Acknowledge recipe review only after actually reviewing it.
+5. For current synthetic commercial evidence choose **Live sponsor sandbox** and NVIDIA interpretation on a new order. Example: **20 litres of lactose-free milk and 5 kg of butter by Monday. Budget €500. Choose the cheapest suitable products.** Actual deployed NVIDIA interpretation and Valio price/availability reads were verified on 14 November; current results may differ. Provider outages remain visible and do not switch to fixtures.
+6. Use **Trust scenarios** for the existing exact manager-approval, hard dietary failure and stale-offer repair demos documented below. The buyer cannot approve itself. Whole-basket Smart order approval uses the same separately authenticated manager role under its own authored demo policy.
+
+The shared synthetic cumulative cap applies to all confirmed demonstrations. Do not reset it automatically or change policy to make a failed scenario appear successful. Use a temporary local ledger for repeated QA.
+
+---
+
+## Original milk trust demonstration
+
+The following script covers the original milk Trust scenarios retained inside A4TB · Valio Aimo. Every order is simulated and no final Junction submission is authorized. A local fixture video was recorded, as described below; no public upload is claimed.
 
 ## Two-minute story
 
@@ -46,7 +61,7 @@ It returned a real NVIDIA typed proposal, live sandbox evidence, an Aiven-persis
 
 ## Thirty-second pitch
 
-"Aimo Order Desk lets a kitchen delegate a purchase without delegating unlimited authority. An external agent finds a suitable offer through typed tools. Our gateway checks the buyer's mandate, product evidence, packs, date and spend. It can proceed, request approval for an exact exception, or block an invalid shortcut. Rewind & Repair shows the failed check and a permitted recovery. The final receipt is simulated, persistent and safe to retry."
+"A4TB · Valio Aimo lets a kitchen delegate a purchase without delegating unlimited authority. An external agent finds a suitable offer through typed tools. Our gateway checks the buyer's mandate, product evidence, packs, date and spend. It can proceed, request approval for an exact exception, or block an invalid shortcut. Rewind & Repair shows the failed check and a permitted recovery. The final receipt is simulated, persistent and safe to retry."
 
 ## Three-minute pitch
 
@@ -76,7 +91,7 @@ This is a narrow, working prototype using synthetic policy and challenge data. W
 
 **Are the carbon and reliability numbers guarantees?** No. Reliability is historical delivered-quantity ratio; carbon is a product-group estimate per kilogram. Neither is a measured on-time probability or individual SKU footprint.
 
-**Have customers validated this?** No direct interviews were conducted. Published customer workflows informed the hypothesis. The hotel and mandate are authored examples.
+**Have customers validated this?** Published workflows and a user-supplied Valio Aimo worker conversation informed the implementation. This is discovery evidence, not measured customer validation. The hotel and mandate remain authored examples.
 
 **Is the source open?** The API contract is documented. The source is in a private repository under the user's instruction. Organizer source access and the recorded event licensing/publicity requirements need owner review. Restricted datasets will not be published.
 

@@ -58,7 +58,7 @@ def sponsor_lookup(customer, day, ids):
                             f"Valio {kind} returned HTTP {r.status_code}. No fixture was substituted."
                         )
                     data = r.json()
-                    if not isinstance(data.get("products"), list):
+                    if not isinstance(data, dict) or not isinstance(data.get("products"), list):
                         raise UpstreamError("Valio response schema was invalid.")
                     out[kind] = data
                     break

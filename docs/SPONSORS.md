@@ -1,3 +1,5 @@
+> **Procurement deployment update — 14 November 2026.** The historical release record below is superseded where it describes milk-only scope, in-memory sessions or blocked hosting. Smart order now supports persisted multi-product carts, structured interpretation, editable constraints, whole-basket approval and simulated checkout. The meal planner transfers saved recipes into that cart. Modal HTTPS deployment is live; the deployed API exercised core cart/confirmation/retry/recovery and real NVIDIA + Valio reads. Current architecture, limitations and setup: [implementation plan](IMPLEMENTATION_PLAN.md), [deployment](DEPLOYMENT.md), and [project status](../PROJECT_STATUS.md). No final competition submission or real purchase occurred.
+
 # Sponsor integrations and evidence
 
 Review date: 14 November 2026, Europe/Helsinki. This file distinguishes earlier account observations, fresh verification, implemented adapters and demonstrated behaviour. No sponsor entries have been submitted. Never publish secrets, raw response dumps or restricted datasets with this file.

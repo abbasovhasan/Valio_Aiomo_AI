@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
-from . import catalog, policy, upstream
+from . import catalog, policy, upstream, planning
 from .config import ROOT, BUYER, CUSTOMER, MANDATE, APPROVER, access_codes, MODEL
 from .store import Store, StoreError
 
@@ -76,7 +76,6 @@ def create_app(store=None):
             )
         return response
 
-    sessions = {}
     attempts = defaultdict(list)
     rate_lock = threading.Lock()
 
@@ -101,7 +100,7 @@ def create_app(store=None):
             if bearer.startswith("Bearer ")
             else request.cookies.get("aimo_session", "")
         )
-        s = sessions.get(hashlib.sha256(token.encode()).hexdigest()) if token else None
+        s = db.get("session", hashlib.sha256(token.encode()).hexdigest(), BUYER) if token else None
         if not s or s["expires"] < time.time():
             raise HTTPException(
                 401,
@@ -184,6 +183,16 @@ def create_app(store=None):
     def save_offer(o):
         db.save("offer", o["id"], o["buyer_id"], o)
 
+    def current_policy(o):
+        if o.get("mandate_snapshot") != policy.mandate_snapshot():
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "policy_changed",
+                    "message": "Customer policy changed. Refresh the offer and obtain any required new approval.",
+                },
+            )
+
     def event(kind, title, detail, status="info", evidence=None):
         return {
             "id": policy.uid("event"),
@@ -245,7 +254,7 @@ def create_app(store=None):
             "customer_id": CUSTOMER,
             "expires": time.time() + 8 * 3600,
         }
-        sessions[hashlib.sha256(token.encode()).hexdigest()] = info
+        db.save("session", hashlib.sha256(token.encode()).hexdigest(), BUYER, info)
         response.set_cookie(
             "aimo_session",
             token,
@@ -267,7 +276,11 @@ def create_app(store=None):
     @app.delete("/api/v1/session")
     def logout(request: Request, response: Response):
         token = request.cookies.get("aimo_session", "")
-        sessions.pop(hashlib.sha256(token.encode()).hexdigest(), None)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        existing = db.get("session", token_hash, BUYER)
+        if existing:
+            existing["expires"] = 0
+            db.save("session", token_hash, BUYER, existing)
         response.delete_cookie("aimo_session")
         return {"signed_out": True}
 
@@ -308,6 +321,40 @@ def create_app(store=None):
             "products": catalog.search(q, limit),
             "source": "local restricted challenge catalog",
         }
+
+    @app.post("/api/v1/meal-plans")
+    def meal_plan(data: planning.MealInput, s=Depends(buyer)):
+        limit("meal-plan-" + s["buyer_id"], 20)
+        if not catalog.load_catalog():
+            raise HTTPException(
+                503, detail="Local challenge catalog is required for meal planning."
+            )
+        result = planning.plan(data)
+        result.update(
+            id=policy.uid("meal"),
+            buyer_id=s["buyer_id"],
+            customer_id=s["customer_id"],
+            created_at=policy.now().isoformat(),
+        )
+        db.save("meal_plan", result["id"], s["buyer_id"], result)
+        db.audit(
+            policy.uid("audit"),
+            s["buyer_id"],
+            "meal_plan_created",
+            {
+                "plan_id": result["id"],
+                "servings": data.servings,
+                "status": result["status"],
+            },
+        )
+        return result
+
+    @app.get("/api/v1/meal-plans/{plan_id}")
+    def get_meal_plan(plan_id: str, s=Depends(identity)):
+        result = db.get("meal_plan", plan_id, s["buyer_id"])
+        if not result:
+            raise HTTPException(404, detail="Meal plan not found in your buyer scope")
+        return result
 
     @app.post("/api/v1/runs")
     def run(data: RunInput, s=Depends(buyer)):
@@ -543,6 +590,7 @@ def create_app(store=None):
     @app.post("/api/v1/offers/{offer_id}/approve")
     def approve(offer_id: str, data: ApprovalInput, s=Depends(approver)):
         o = load_offer(offer_id, s)
+        current_policy(o)
         if o["status"] != "approval_required":
             raise HTTPException(
                 409,
@@ -609,6 +657,7 @@ def create_app(store=None):
         prior = db.existing(o, idempotency_key)
         if prior:
             return prior
+        current_policy(o)
         at = policy.now()
         if policy.parse_time(o["expires_at"]) <= at:
             raise HTTPException(
@@ -726,6 +775,7 @@ def create_app(store=None):
             "scenario": o["scenario"],
             "fingerprint": o["fingerprint"],
             "approval": o.get("approval"),
+            "commercial_journey": MANDATE["commercial_journey"],
             "idempotent_replay": False,
             "evidence": {
                 "offer": o["evidence"],
@@ -764,6 +814,9 @@ def create_app(store=None):
             and r["customer_id"] == s["customer_id"],
             "verification_scope": "Gateway record consistency and issuer-held offer hash; not a cryptographic signature, independent product truth, stock reservation or proof of delivery.",
         }
+
+    from .procurement import register_routes
+    register_routes(app, db, buyer, approver, identity, limit)
 
     @app.get("/{path:path}", include_in_schema=False)
     def frontend(path: str):

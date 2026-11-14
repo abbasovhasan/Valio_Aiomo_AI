@@ -53,11 +53,30 @@ def digest(o):
         "checks",
         "status",
     ]
+    # Preserve historical receipt hashes created before policy snapshots existed.
+    # Legacy offers can be inspected but current_policy blocks new approvals/commits.
+    if "mandate_snapshot" in o:
+        keys.append("mandate_snapshot")
     return hashlib.sha256(
         json.dumps(
             {k: o.get(k) for k in keys}, sort_keys=True, separators=(",", ":")
         ).encode()
     ).hexdigest()
+
+
+def mandate_snapshot():
+    return {
+        k: MANDATE[k]
+        for k in [
+            "id",
+            "autonomous_limit",
+            "exception_limit",
+            "cumulative_limit",
+            "expires_at",
+            "allowed_products",
+            "diet",
+        ]
+    }
 
 
 def make_offer(p, request, evidence, spent_cents=0, clock=None):
@@ -78,6 +97,7 @@ def make_offer(p, request, evidence, spent_cents=0, clock=None):
         "checks": [],
         "reasons": [],
         "repair": None,
+        "mandate_snapshot": copy.deepcopy(mandate_snapshot()),
     }
 
     def check(code, label, ok, detail, unknown=False):

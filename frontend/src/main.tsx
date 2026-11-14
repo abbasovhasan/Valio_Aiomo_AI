@@ -38,6 +38,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import "./style.css";
+import { MealPlanner } from "./MealPlanner";
+import { ProcurementDesk } from "./ProcurementDesk";
 
 type CheckItem = {
   code: string;
@@ -279,7 +281,7 @@ function App() {
     [code, setCode] = useState(""),
     [authError, setAuthError] = useState(""),
     [authBusy, setAuthBusy] = useState(false);
-  const [tab, setTab] = useState("desk"),
+  const [tab, setTab] = useState("purchase"),
     [mode, setMode] = useState("fixture"),
     [scenario, setScenario] = useState("baseline"),
     [quantity, setQuantity] = useState("1000"),
@@ -287,6 +289,7 @@ function App() {
     [brief, setBrief] = useState(
       "Breakfast for the whole hotel. At least 1,000 litres of lactose-free milk, delivered by Monday. Keep the dietary rule.",
     );
+  const [quoteSessionId, setQuoteSessionId] = useState<string | null>(null);
   const [run, setRun] = useState<Run | null>(null),
     [busy, setBusy] = useState(false),
     [actionBusy, setActionBusy] = useState(""),
@@ -541,10 +544,10 @@ function App() {
         <a
           href="#"
           className="brand"
-          aria-label="Aimo Order Desk home"
+          aria-label="A4TB Valio Aimo home"
           onClick={(e) => {
             e.preventDefault();
-            setTab("desk");
+            setTab("purchase");
           }}
         >
           <span className="brand-mark">
@@ -552,9 +555,9 @@ function App() {
           </span>
           <span className="brand-divider" />
           <span className="brand-sub">
-            ORDER
+            A4TB
             <br />
-            DESK
+            VALIO AIMO
           </span>
         </a>
         <nav
@@ -562,7 +565,9 @@ function App() {
           className={mobileMenu ? "mobile-open" : ""}
         >
           {[
-            ["desk", "Order desk"],
+            ["purchase", "Smart order"],
+            ["desk", "Trust scenarios"],
+            ["meals", "Meal planner"],
             ["recorder", "Decision recorder"],
             ["gateway", "Gateway API"],
           ].map(([id, label]) => (
@@ -637,12 +642,19 @@ function App() {
             <span>Example purchasing mandate</span>
           </div>
           <div
-            className={"source-pill " + (displayMode === "live" ? "live" : "")}
+            className={
+              "source-pill " +
+              (tab !== "meals" && displayMode === "live" ? "live" : "")
+            }
           >
             <Radio size={13} />
-            {displayMode === "live"
-              ? "LIVE VALIO SANDBOX"
-              : "LABELLED REHEARSAL FIXTURE"}
+            {tab === "purchase"
+              ? "CUSTOMER-REVIEWED BASKET · SIMULATION"
+              : tab === "meals"
+              ? "LOCAL CATALOG · PLANNING ONLY"
+              : displayMode === "live"
+                ? "LIVE VALIO SANDBOX"
+                : "LABELLED REHEARSAL FIXTURE"}
           </div>
         </div>
         {error && (
@@ -661,6 +673,17 @@ function App() {
             </button>
           </div>
         )}
+        <div hidden={tab !== "purchase"}>
+          <ProcurementDesk api={api} role={session.role} onSignIn={() => setAuthOpen(true)} onUpdated={loadWorkspace} initialSessionId={quoteSessionId} />
+        </div>
+        <div hidden={tab !== "meals"}>
+          <MealPlanner
+            onQuoteSession={(id) => { setQuoteSessionId(id); setTab("purchase"); }}
+            api={api}
+            role={session.role}
+            onSignIn={() => setAuthOpen(true)}
+          />
+        </div>
         {tab === "desk" && (
           <div className="desk-grid">
             <aside className="brief-column">
@@ -1295,6 +1318,10 @@ function App() {
                   </div>
                   <span>Shared cap · checked inside one transaction</span>
                 </div>
+                <p className="brief-note">
+                  Customer spend limits are configured by the server operator.
+                  Changes require refreshed offers and renewed approval.
+                </p>
                 <div className="mandate-footer">
                   <LockKeyhole size={12} />
                   {session.role
@@ -1481,6 +1508,16 @@ function App() {
                     "Exchange a server-issued access code.",
                   ],
                   ["GET", "/api/v1/products", "Search the static catalogue."],
+                  [
+                    "POST",
+                    "/api/v1/meal-plans",
+                    "Scale a meal into a review-only ingredient plan.",
+                  ],
+                  [
+                    "GET",
+                    "/api/v1/meal-plans/{id}",
+                    "Review a saved plan in your buyer scope.",
+                  ],
                   ["POST", "/api/v1/runs", "Create a grounded purchasing run."],
                   [
                     "POST",
@@ -1552,7 +1589,7 @@ function App() {
       </main>
       <footer className="page-footer">
         <span>
-          AIMO ORDER DESK <span>·</span> Built for the moments that need
+          A4TB · VALIO AIMO <span>·</span> Built for the moments that need
           judgment.
         </span>
         <div>
@@ -1834,6 +1871,10 @@ function Receipt({
       <p>
         Retries return this same order. This is our simulator, not a Valio
         purchase or stock reservation.
+      </p>
+      <p>
+        B2B purchases require a customer contract and are usually invoiced after
+        delivery. This simulated receipt is not an invoice; no payment is taken.
       </p>
       <button className="text-button" onClick={onInspect}>
         Inspect the decision receipt <ArrowUpRight size={15} />

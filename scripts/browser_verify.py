@@ -37,6 +37,13 @@ with sync_playwright() as p:
     expect(
         page.get_by_role("heading", name="Good judgment. On the record.")
     ).to_be_visible()
+    expect(
+        page.get_by_role("heading", name="Tell us what you need.")
+    ).to_be_visible()
+    expect(page.get_by_role("button", name="Build my cart", exact=True)).to_be_visible()
+    check("Smart order is the primary landing workflow")
+    # The original gateway checks exercise the milk lab, now named Trust scenarios.
+    page.get_by_role("button", name="Trust scenarios", exact=True).click()
     expect(page.get_by_text("LABELLED REHEARSAL FIXTURE", exact=True)).to_be_visible()
     page.screenshot(path=str(LOCAL / "ui-desktop.png"), full_page=True)
     report["screenshots"].append(".local/ui-desktop.png")
@@ -47,6 +54,41 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Open this session").click()
     expect(page.get_by_role("dialog")).to_have_count(0)
     check("Unauthenticated action requires server-issued buyer session")
+    page.get_by_role("button", name="Meal planner", exact=True).click()
+    page.get_by_role("button", name="Build shopping plan").click()
+    expect(page.get_by_role("heading", name="Every diner counted once.")).to_be_visible(
+        timeout=45000
+    )
+    expect(page.get_by_text("370", exact=True)).to_be_visible()
+    expect(
+        page.get_by_role("heading", name="Before this becomes an order")
+    ).to_be_visible()
+    with page.expect_download() as export:
+        page.get_by_role("button", name="Export draft shopping plan (JSON) ↗").click()
+    exported = json.loads(Path(export.value.path()).read_text())
+    assert exported["can_commit"] is False and len(exported["lines"]) == 11
+    page.get_by_label("Total diners", exact=True).fill("600")
+    expect(
+        page.get_by_role("button", name="Export draft shopping plan (JSON) ↗")
+    ).to_be_disabled()
+    page.get_by_role("button", name="Build shopping plan").click()
+    expect(page.get_by_text("470", exact=True)).to_be_visible(timeout=45000)
+    page.get_by_role("button", name="Trust scenarios", exact=True).click()
+    page.get_by_role("button", name="Meal planner", exact=True).click()
+    expect(page.get_by_text("470", exact=True)).to_be_visible()
+    page.screenshot(path=str(LOCAL / "meal-plan-desktop.png"), full_page=False)
+    report["screenshots"].append(".local/meal-plan-desktop.png")
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), (
+        "Meal planner mobile overflow"
+    )
+    page.screenshot(path=str(LOCAL / "meal-plan-mobile.png"), full_page=False)
+    report["screenshots"].append(".local/meal-plan-mobile.png")
+    page.set_viewport_size({"width": 1440, "height": 1120})
+    page.get_by_role("button", name="Trust scenarios", exact=True).click()
+    check(
+        "Meal plan scales cohorts, exports review-only JSON, invalidates changed inputs, survives navigation and fits mobile"
+    )
     page.get_by_role("button", name="Send to buyer agent").click()
     expect(page.get_by_text("3 offers inspected", exact=True)).to_be_visible(
         timeout=45000
@@ -132,7 +174,7 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Gateway API").click()
     expect(page.get_by_role("heading", name="Bring your own agent.")).to_be_visible()
     check("Independent gateway interface and real OpenAPI link exposed")
-    page.get_by_role("button", name="Order desk", exact=True).click()
+    page.get_by_role("button", name="Trust scenarios", exact=True).click()
     page.get_by_role("button", name="What makes it trustworthy?").click()
     expect(page.get_by_role("dialog")).to_be_visible()
     page.get_by_role("button", name="Close explanation").click()
@@ -155,7 +197,11 @@ with sync_playwright() as p:
         "document.documentElement.scrollWidth <= window.innerWidth"
     ), "Gateway mobile horizontal overflow"
     mobile.get_by_role("button", name="Toggle navigation").click()
-    mobile.get_by_role("button", name="Order desk", exact=True).click()
+    mobile.get_by_role("button", name="Trust scenarios", exact=True).click()
+    expect(mobile.get_by_role("button", name="Send to buyer agent")).to_be_visible()
+    assert mobile.evaluate(
+        "document.documentElement.scrollWidth <= window.innerWidth"
+    ), "Trust scenarios mobile horizontal overflow"
     mobile.screenshot(path=str(LOCAL / "ui-mobile.png"), full_page=True)
     report["screenshots"].append(".local/ui-mobile.png")
     check("390px mobile layout, working navigation, no horizontal overflow")

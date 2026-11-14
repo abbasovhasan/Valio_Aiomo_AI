@@ -669,3 +669,24 @@ def test_changed_tax_basis_after_approval_requires_new_offer(env, monkeypatch):
         and result.json()["detail"]["code"] == "revalidation_failed"
     )
     assert db.spent() == 0
+
+
+def test_policy_change_invalidates_uncommitted_offer_and_approval(env, monkeypatch):
+    client, db, app = env
+    c = client()
+    offer = selected(run(c))
+    monkeypatch.setitem(MANDATE, "autonomous_limit", "1000.00")
+    response = commit(c, offer)
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "policy_changed"
+    new_offer = selected(run(c))
+    assert new_offer["status"] == "approval_required"
+    a = client("approver")
+    monkeypatch.setitem(MANDATE, "exception_limit", "1100.00")
+    response = a.post(
+        f"/api/v1/offers/{new_offer['id']}/approve",
+        json={"fingerprint": new_offer["fingerprint"]},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "policy_changed"
+    assert db.spent() == 0

@@ -14,3 +14,7 @@ frontend/tsconfig.tsbuildinfo
 .pytest_cache/
 .test-results/
 playwright-report/
+
+# Sites publishing checkouts have their own source repository.
+branded-web/
+branded-web-a4tb/

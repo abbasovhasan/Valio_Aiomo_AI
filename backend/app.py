@@ -63,7 +63,7 @@ def create_app(store=None):
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(self), geolocation=()"
+            "camera=(self), microphone=(self), geolocation=()"
         )
         if request.url.path.startswith("/api/") or request.url.path == "/health":
             response.headers["Cache-Control"] = "no-store"
@@ -257,15 +257,6 @@ def create_app(store=None):
             ],
         }
 
-    @app.get("/api/v1/products")
-    def products(q: str = "lactose free milk", limit: int = 10, s=Depends(identity)):
-        if len(q) > 100 or not 1 <= limit <= 20:
-            raise HTTPException(422, detail="Search bounds exceeded")
-        return {
-            "products": catalog.search(q, limit),
-            "source": "local restricted challenge catalog",
-        }
-
     @app.post("/api/v1/meal-plans")
     def meal_plan(data: planning.MealInput, s=Depends(buyer)):
         limit("meal-plan-" + s["buyer_id"], 20)
@@ -273,7 +264,10 @@ def create_app(store=None):
             raise HTTPException(
                 503, detail="Local challenge catalog is required for meal planning."
             )
-        result = planning.plan(data)
+        from .preferences import read as read_preferences
+        saved_preferences = read_preferences(db, s)
+        result = planning.plan(data, saved_preferences["dietary_restrictions"], saved_preferences["excluded_ingredients"])
+        result["saved_restrictions_applied"] = {key: saved_preferences[key] for key in ["dietary_restrictions", "excluded_ingredients"]}
         result.update(
             id=policy.uid("meal"),
             buyer_id=s["buyer_id"],
@@ -765,6 +759,10 @@ def create_app(store=None):
     register_routes(app, db, buyer, approver, identity, limit)
     from .preferences import register_routes as register_preferences
     register_preferences(app, db, buyer, limit)
+    from .product_search import register_routes as register_search
+    register_search(app, db, identity, limit)
+    from .history import register_routes as register_history
+    register_history(app, db, buyer, limit)
     from .multimodal import register_routes as register_multimodal
     register_multimodal(app, buyer, limit)
 

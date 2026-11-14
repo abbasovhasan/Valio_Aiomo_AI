@@ -3,13 +3,13 @@ Reviewed 14 November 2026, Europe/Helsinki
 
 PURPOSE AND CURRENT IMPLEMENTATION
 
-NVIDIA is an optional language/vision proposal service. It never supplies authoritative
+NVIDIA provides optional language interpretation and automatic image reading. It never supplies authoritative
 prices, stock, package dimensions, taxes, customer permissions, spending thresholds or
 order totals. The FastAPI gateway validates real catalog/sandbox facts and performs
 all monetary and authorization checks deterministically. Every order is simulated.
 
 Selected opt-in text model: nvidia/nemotron-3.5-lightning-30b-a3b.
-Independent optional vision model: nvidia/nemotron-3.5-super-vl-120b-a12b.
+Automatic vision model: nvidia/nemotron-3.5-super-vl-120b-a12b.
 Configuration: NVIDIA_API_KEY stays server-side; NVIDIA_MODEL selects text and
 NVIDIA_VISION_MODEL selects vision. No key is sent to the frontend or committed.
 
@@ -22,15 +22,21 @@ failures are visible and preserve the saved cart. The supported recipe exemplar 
 to the labelled deterministic planner rather than pretending the model authored it.
 
 backend/model_providers.py and backend/multimodal.py use one bounded
-extract_input_text tool for optional image OCR. JPEG/PNG input is decoded, bounded,
+extract_input_text tool for automatic image reading. The owner requested this built-in
+behavior without a customer provider selector or per-image checkbox. Original JPEG/PNG
+files are checked against 5 MiB, proportionally resized in the browser to at most
+1,600 pixels per side and reencoded before upload. The independent server decoder
+retains size/pixel guards for direct API inputs. JPEG/PNG input is decoded, bounded,
 metadata-stripped and reencoded before the selected vision call. The result is editable
 text plus uncertainties, source and timing; no cart is created by extraction. The
 customer must review/add text and then separately request a basket. Uploaded files and
 extracted text are not persisted by these input endpoints.
 
-Default OCR is LOCAL Tesseract (English/Finnish). Default audio transcription is LOCAL
-pretrained Whisper base, CTranslate2 CPU int8. They do not invoke NVIDIA or send media
-to another AI provider. An actual NVIDIA Riva Parakeet CTC 1.1B test succeeded for a
+Default image reading uses NVIDIA. A provider failure falls back to LOCAL Tesseract
+(English/Finnish), with honest API provenance and a warning to check fallback text.
+An explicit local API route remains available for offline rehearsal. Default audio
+transcription is LOCAL pretrained Whisper base, CTranslate2 CPU int8; audio does not
+go to NVIDIA or another AI provider. An actual NVIDIA Riva Parakeet CTC 1.1B test succeeded for a
 synthetic clip, but that hosted ASR was not selected or added as a runtime dependency.
 
 The retained original outside-agent script uses typed candidate proposals through the
@@ -82,7 +88,7 @@ accuracy for noisy speech, handwriting, Finnish audio or multilingual images.
 
 DEPLOYED RELEASE EVIDENCE
 
-The release coordinator recorded 171 passing backend tests and a passing frontend
+Historical C67 release: the coordinator recorded 171 passing backend tests and a passing frontend
 production build. The public release serving index-C67pl32K.js passed 47 extended
 checks through https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site. Actual selected
 Lightning interpretation extracted both products and actual Valio sandbox quotations
@@ -120,17 +126,19 @@ Modal hosts CPU FastAPI/private volumes under the existing verified Junction gra
 and spending cap; it does not host these large NVIDIA models. Actual local complete
 app+catalog+OCR+Whisper base peak RSS 882.4 MiB motivated 1 CPU / 1,536 MiB headroom.
 The deployed media observations above are not a concurrency or latency guarantee.
-A November Modal CLI usage report observed $0.04369075 USD total at the release
-check. This is not a final bill, remaining balance or NVIDIA inference charge.
+A later November Modal CLI usage report observed $0.06505835 USD total during
+the catalog release preparation. This is not a final bill, remaining balance or NVIDIA inference charge.
 
 PRIVACY, LIMITATIONS AND IMPROVEMENT
 
 NVIDIA trial APIs are used only for nonconfidential challenge/evaluation content.
-Text interpretation and cloud vision are optional; local text/OCR/audio are defaults.
+Text interpretation remains optional. Image reading is automatic NVIDIA by owner
+request; audio remains local and OCR provides a service-failure/offline fallback.
 The official trial terms restrict confidential/sensitive/personal inputs unless
-expressly permitted and describe logging/data use. Cloud image extraction requires
-explicit provider selection and cloud_consent=true before the body is read. The local
-media paths are the default. No registration identity/credential is sent to media AI.
+expressly permitted and describe logging/data use. Automatic image extraction has
+no provider selector or per-image checkbox in the customer interface. A plain privacy
+note describes external image reading and the nonconfidential-demo restriction.
+Explicit cloud_consent=false API requests still prevent an external call. No registration identity/credential is sent to media AI.
 Production/confidential use requires appropriate provider terms or a validated local
 model; we did not activate a paid production subscription.
 
@@ -145,3 +153,7 @@ Potential improvements are representative consented speech/image evaluation, mea
 error/latency distributions, stronger provider schema conformance and appropriate
 privacy coverage. No fine-tuning is justified by this small evaluation set. Model
 outputs cannot waive hard requirements or create a real order, invoice or payment.
+
+Latest continuation, default-reader/high-resolution-photo verification and final
+private release evidence: docs/FINAL_QA_REPORT.md. Earlier hosted results above are
+explicitly historical and do not establish physical-camera or broad image accuracy.

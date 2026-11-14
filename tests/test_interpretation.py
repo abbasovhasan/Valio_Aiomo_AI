@@ -41,9 +41,48 @@ def test_recipe_overlap_is_required_and_quantities_deterministic():
 
 def test_unknown_restrictions_and_missing_quantity_do_not_disappear():
     assert nlp.interpret('20 litres of milk and some butter')['ambiguous_fields']
-    assert nlp.interpret('20 litres of dairy-free milk')['ambiguous_fields']
+    dairy = nlp.interpret('20 litres of dairy-free milk')
+    assert dairy['items'][0]['dietary'] == ['milk_free']
+    assert dairy['items'][0]['query'] == 'milk'
     assert nlp.interpret('20 litres of milk under $100')['ambiguous_fields']
     assert nlp.interpret('Prepare risotto for 100 people')['ambiguous_fields']
+
+
+def test_allergy_and_no_pork_followups_are_hard_and_keep_other_requirements(declared_brands):
+    original = nlp.interpret('20 litres lactose-free milk and 1 kg butter')
+    restricted = nlp.interpret('Peanut allergy. No pork.', original)
+    assert not restricted['ambiguous_fields']
+    assert restricted['items'][0]['dietary'] == ['lactose_free', 'peanut_free', 'no_pork']
+    assert restricted['items'][1]['dietary'] == ['peanut_free', 'no_pork']
+    changed = nlp.interpret('Choose cheaper milk. Budget €90.', restricted)
+    assert changed['items'] == restricted['items']
+    assert changed['preference'] == 'cheapest'
+
+
+def test_inline_restrictions_keep_distinct_product_cohorts(declared_brands):
+    result = nlp.interpret('8 kg vegan mozzarella and 12 kg cheddar')
+    assert [(i['query'], i['dietary']) for i in result['items']] == [('mozzarella', ['vegan']), ('cheddar', [])]
+    allergy = nlp.interpret('2 kg peanut-free chocolate')
+    assert allergy['items'][0]['query'] == 'chocolate'
+    assert allergy['items'][0]['dietary'] == ['peanut_free']
+    assert nlp.interpret('2 kg cheese. Coconut allergy.')['ambiguous_fields']
+    wheat = nlp.interpret('2 kg wheat-free flour')
+    assert wheat['ambiguous_fields'] and not wheat['items'][0]['dietary']
+    assert nlp.interpret('2 kg gluten-free flour. Wheat allergy.')['ambiguous_fields']
+    inline = nlp.interpret('20 litres milk, peanut allergy')
+    assert inline['items'][0]['query'] == 'milk'
+    assert inline['items'][0]['dietary'] == ['peanut_free']
+    assert not inline['ambiguous_fields']
+
+
+def test_model_cannot_drop_saved_allergen_or_custom_exclusion(monkeypatch, declared_brands):
+    prior = nlp.interpret('2 kg peanut-free chocolate')
+    prior['items'][0]['excluded_ingredients'] = ['coconut']
+    monkeypatch.setattr(nlp, '_model', lambda *args: {'items': [{'query': 'chocolate', 'quantity': '3', 'unit': 'kg', 'dietary': []}]})
+    changed = nlp.interpret('Change chocolate to 3 kg', prior, use_model=True)
+    assert changed['items'][0]['dietary'] == ['peanut_free']
+    assert changed['items'][0]['excluded_ingredients'] == ['coconut']
+    assert changed['ambiguous_fields']
 
 
 def test_model_output_is_typed_and_cannot_inject_authority(monkeypatch):

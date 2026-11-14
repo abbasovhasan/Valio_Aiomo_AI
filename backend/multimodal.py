@@ -159,9 +159,7 @@ def extract_image_cloud(data):
                              elapsed_ms=round((time.perf_counter() - started) * 1000))
 
 
-def extract_image(data, provider="local"):
-    if provider == "nvidia":
-        return extract_image_cloud(data)
+def extract_image_local(data):
     started = time.perf_counter()
     clean = sanitise_image(data)
     executable = os.getenv("AIMO_TESSERACT_CMD") or shutil.which("tesseract")
@@ -213,6 +211,30 @@ def extract_image(data, provider="local"):
     return InputTextResponse(text=text, uncertainties=uncertainties,
                              source="Local Tesseract · English/Finnish printed text",
                              elapsed_ms=round((time.perf_counter() - started) * 1000))
+
+
+def extract_image(data, provider="local"):
+    """Automatic reader with an honest local fallback, or explicit offline OCR.
+
+    The HTTP default is NVIDIA. The helper retains its local default for existing
+    offline preparation/benchmark callers that invoke it directly.
+    """
+    if provider == "local":
+        return extract_image_local(data)
+    if provider != "nvidia":
+        fail("image_provider", "Choose a supported image reader.")
+    started = time.perf_counter()
+    try:
+        return extract_image_cloud(data)
+    except UpstreamError:
+        try:
+            result = extract_image_local(data)
+        except UpstreamError:
+            raise UpstreamError("The image could not be read right now. Try a clearer image or type the request.") from None
+        result.uncertainties = ["The primary image reader was unavailable. Check the fallback text carefully."] + result.uncertainties[:11]
+        result.source += " · fallback after NVIDIA unavailable"
+        result.elapsed_ms = round((time.perf_counter() - started) * 1000)
+        return result
 
 
 def decode_audio(data):
@@ -326,11 +348,11 @@ UPLOAD_SCHEMA = {"requestBody": {"required": True, "content": {"multipart/form-d
 
 def register_routes(app, buyer, limit):
     @app.post("/api/v1/input/image", response_model=InputTextResponse, openapi_extra=UPLOAD_SCHEMA)
-    async def image(request: Request, provider: Literal["local", "nvidia"] = "local",
-                    cloud_consent: bool = False, scope=Depends(buyer)):
+    async def image(request: Request, provider: Literal["local", "nvidia"] = "nvidia",
+                    cloud_consent: bool | None = None, scope=Depends(buyer)):
         limit("input-image-" + scope["buyer_id"], 8)
-        if provider == "nvidia" and not cloud_consent:
-            fail("cloud_consent_required", "Cloud OCR sends the sanitized image to NVIDIA's trial API. Confirm this is nonconfidential demonstration content before uploading.")
+        if provider == "nvidia" and cloud_consent is False:
+            fail("cloud_consent_required", "External image reading was explicitly declined. Use local image reading or type the request.")
         data = await read_upload(request)
         return await run_in_threadpool(extract_image, data, provider)
 

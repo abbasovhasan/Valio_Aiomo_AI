@@ -126,10 +126,14 @@ def test_ingredient_relevance_is_not_overridden_by_ready_food_diet_claims(produc
     rows["010"] = row("010", "Spaghetti Sauce", ["FREE_FROM_GLUTEN"])
     rows["020"] = row("020", "Salt Potato Chips")
     rows["030"] = row("030", "Sea Salt")
-    assert all("Sauce" not in p["name"] for p in facts.search("spaghetti", dietary=["gluten_free"]))
-    assert [p["id"] for p in facts.search("salt")] == ["030"]
+    pasta = facts.search("spaghetti", dietary=["gluten_free"])
+    assert pasta[0]["id"] == "200"
+    assert next(p for p in pasta if p["id"] == "010")["purpose_review_required"]
+    salt = facts.search("salt")
+    assert salt[0]["id"] == "030"
+    assert next(p for p in salt if p["id"] == "020")["purpose_review_required"]
     rows["040"] = row("040", "Milk free spread", ["FREE_FROM_LACTOSE"])
-    assert all(p["id"] != "040" for p in facts.search("milk", dietary=["lactose_free"]))
+    assert next(p for p in facts.search("milk", dietary=["lactose_free"]) if p["id"] == "040")["purpose_review_required"]
 
 
 def test_inconsistent_named_multipack_mass_blocks_instead_of_guessing(products):
@@ -161,7 +165,9 @@ def test_raw_ingredients_are_not_replaced_by_prepared_food_with_diet_claims(prod
         rows[pid] = row(pid, name, ["FREE_FROM_GLUTEN"])
     for query, wanted in [("onion", "010"), ("salt", "020"), ("minced beef", "030")]:
         results = facts.search(query, dietary=["gluten_free"])
-        assert [p["id"] for p in results] == [wanted]
+        assert results[0]["id"] == wanted
+        assert not results[0]["purpose_review_required"]
+        assert all(p["purpose_review_required"] for p in results[1:])
         assert facts.suitability(results[0], ["gluten_free"])
     # Explicitly requested prepared foods remain discoverable.
     assert facts.search("onion salad")[0]["id"] == "011"
@@ -220,12 +226,13 @@ def test_generic_milk_never_silently_becomes_flavoured_sour_or_condensed(product
         rows[pid] = row(pid, f"Valio {variant} milk 1 L", ["FREE_FROM_LACTOSE"], volume=1)
         rows[pid]["synkkaData"]["brand"] = "Valio"
     generic = facts.discover("milk", dietary=["lactose_free"], required_brand="Valio")
-    assert [p["id"] for p in generic] == ["300"]
+    assert generic[0]["id"] == "300"
+    assert all(p["purpose_review_required"] for p in generic[1:])
     assert facts.suitability(generic[0], required_brand="Valio")
     # A missing plain match stays missing; the strongest available flavour is
     # never promoted simply because it is the only product with the right brand.
     del rows["300"]
-    assert facts.search("milk", dietary=["lactose_free"]) == []
+    assert all(p["purpose_review_required"] for p in facts.search("milk", dietary=["lactose_free"]))
     for variant in ["vanilla", "strawberry", "banana", "sour", "condensed"]:
         assert [p["id"] for p in facts.search(f"{variant} milk", dietary=["lactose_free"])] == [variant]
     assert facts.search("vanillamilk")[0]["id"] == "vanilla"
@@ -268,3 +275,11 @@ def test_in_place_text_changes_and_catalog_replacement_invalidate_index(products
     assert facts.search("salt")[0]["id"] == "100"
     monkeypatch.setattr(catalog, "load_catalog", lambda: {})
     assert facts.search("salt") == []
+
+
+def test_single_character_names_and_fragments_are_searchable(products):
+    rows, row = products
+    rows["single"] = row("single", "A")
+    assert "single" in {p["id"] for p in facts.search_page("A")["products"]}
+    assert facts.search_page("s")["total"] >= 2
+    assert facts.search_page("---")["total"] == 0

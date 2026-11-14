@@ -300,7 +300,8 @@ function App() {
     [toast, setToast] = useState(""),
     [elapsed, setElapsed] = useState(0),
     [about, setAbout] = useState(false),
-    [mobileMenu, setMobileMenu] = useState(false);
+    [mobileMenu, setMobileMenu] = useState(false),
+    [demoTools, setDemoTools] = useState(false);
   const [comparison, setComparison] = useState<{
     from: Offer;
     to: Offer;
@@ -547,33 +548,16 @@ function App() {
           aria-label="Main navigation"
           className={mobileMenu ? "mobile-open" : ""}
         >
-          {[
-            ["purchase", "Smart order"],
-            ["desk", "Trust scenarios"],
-            ["meals", "Meal planner"],
-            ["recorder", "Decision recorder"],
-            ["gateway", "Gateway API"],
-          ].filter(([id]) => session.demo_workspace !== false || !["desk", "recorder"].includes(id)).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => {
-                setTab(id);
-                setMobileMenu(false);
-              }}
-              className={tab === id ? "active" : ""}
-            >
-              {label}
-              {id === "recorder" && run && (
-                <span className="nav-count">{run.events.length}</span>
-              )}
-            </button>
-          ))}
+          {[["purchase", "Smart order"], ["products", "Products"], ["meals", "Meal planner"], ["history", "History"]].map(([id, label]) => <button key={id} onClick={() => { setTab(id); setMobileMenu(false); }} className={tab === id ? "active" : ""}>{label}</button>)}
+
         </nav>
         <div className="topbar-right">
+          <details className="operator-menu"><summary>Demo tools</summary><div><button onClick={() => { setDemoTools((value) => !value); setTab("purchase"); }}>Data & model settings {demoTools ? "✓" : ""}</button>{session.demo_workspace !== false && <><button onClick={() => setTab("desk")}>Trust scenarios</button><button onClick={() => setTab("recorder")}>Decision recorder</button></>}<button onClick={() => setTab("gateway")}>Gateway API</button><button onClick={() => setAbout(true)}>About trust</button></div></details>
+
           <span className="simulation">
             <span /> SIMULATED ORDERS ONLY
           </span>
-          <button className="profile-button" onClick={() => setAuthOpen(true)}>
+          <button className="profile-button" aria-label="Account and sign-in" onClick={() => setAuthOpen(true)}>
             <span className="avatar">
               {session.role === "approver" ? "LK" : session.role ? "AB" : "↗"}
             </span>
@@ -597,49 +581,6 @@ function App() {
         </div>
       </header>
       <main>
-        <section className="page-heading">
-          <div>
-            <div className="eyebrow">
-              <span className="tiny-square" /> THE BUYER AGENT'S WORKBENCH
-            </div>
-            <h1>
-              Good judgment.
-              <br className="mobile-br" /> <em>On the record.</em>
-            </h1>
-            <p>
-              Your kitchen sets the boundaries. The agent finds a way through.
-            </p>
-          </div>
-          <button className="explain-link" onClick={() => setAbout(true)}>
-            <span className="play-ring">
-              <Play size={13} fill="currentColor" />
-            </span>{" "}
-            What makes it trustworthy? <ArrowUpRight size={17} />
-          </button>
-        </section>
-        <div className="context-strip">
-          <div>
-            <span className="hotel-symbol">A</span>
-            <strong>{session.demo_workspace === false ? session.workspace_name || session.name : "Aurora Hotel"}</strong>
-            <span className="context-dot">·</span>
-            <span>Example purchasing mandate</span>
-          </div>
-          <div
-            className={
-              "source-pill " +
-              (tab !== "meals" && displayMode === "live" ? "live" : "")
-            }
-          >
-            <Radio size={13} />
-            {tab === "purchase"
-              ? "CUSTOMER-REVIEWED BASKET · SIMULATION"
-              : tab === "meals"
-              ? "LOCAL CATALOG · PLANNING ONLY"
-              : displayMode === "live"
-                ? "LIVE VALIO SANDBOX"
-                : "LABELLED REHEARSAL FIXTURE"}
-          </div>
-        </div>
         {error && (
           <div className="error-banner" role="alert">
             <ShieldX size={20} />
@@ -656,8 +597,8 @@ function App() {
             </button>
           </div>
         )}
-        <div hidden={tab !== "purchase"}>
-          <ProcurementDesk key={session.buyer_id || "anonymous"} buyerId={session.buyer_id} api={api} role={session.role} active={tab === "purchase" && !authOpen} onSignIn={() => setAuthOpen(true)} onUpdated={loadWorkspace} initialSessionId={quoteSessionId} />
+        <div hidden={!["purchase", "products", "history"].includes(tab)}>
+          <ProcurementDesk key={session.buyer_id || "anonymous"} buyerId={session.buyer_id} api={api} role={session.role} active={tab === "purchase" && !authOpen} view={tab === "products" ? "products" : tab === "history" ? "history" : "order"} onNavigate={(view) => setTab(view === "order" ? "purchase" : view)} demoTools={demoTools} onSignIn={() => setAuthOpen(true)} onUpdated={loadWorkspace} initialSessionId={quoteSessionId} />
         </div>
         <div hidden={tab !== "meals"}>
           <MealPlanner
@@ -711,6 +652,7 @@ function App() {
                       aria-label="Delivery date"
                       type="date"
                       value={date}
+                      onInput={(e) => setDate(e.currentTarget.value)}
                       onChange={(e) => setDate(e.target.value)}
                     />
                   </label>
@@ -1573,8 +1515,7 @@ function App() {
       </main>
       <footer className="page-footer">
         <span>
-          A4TB · VALIO AIMO <span>·</span> Built for the moments that need
-          judgment.
+          A4TB · VALIO AIMO
         </span>
         <div>
           <span className="footer-lock">

@@ -15,6 +15,8 @@ from backend import multimodal
 from backend.model_providers import ModelResult
 from backend.upstream import UpstreamError
 
+REAL_EXTRACT_IMAGE = multimodal.extract_image
+
 
 def picture(size=(300, 180), kind="PNG", metadata=False):
     image = Image.new("RGB", size, "white")
@@ -95,17 +97,25 @@ def test_valid_image_upload_returns_editable_text_and_no_authority(client):
     assert response.status_code == 200
     body = response.json()
     assert body["text"] == "20 litres milk" and body["review_required"] is True
-    assert calls == [(data, "local")]
+    assert calls == [(data, "nvidia")]
     assert set(body) == {"text", "uncertainties", "source", "elapsed_ms", "review_required"}
 
 
-def test_cloud_image_requires_explicit_consent_before_extraction(client):
+def test_explicit_cloud_denial_is_respected_but_omission_uses_automatic_reader(client):
     c, calls = client
-    response = c.post("/api/v1/input/image?provider=nvidia", files={"file": ("x.png", picture())}, headers={"X-Role": "buyer"})
+    response = c.post("/api/v1/input/image?provider=nvidia&cloud_consent=false", files={"file": ("x.png", picture())}, headers={"X-Role": "buyer"})
     assert response.status_code == 422 and response.json()["detail"]["code"] == "cloud_consent_required"
     assert not calls
     response = c.post("/api/v1/input/image?provider=nvidia&cloud_consent=true", files={"file": ("x.png", picture())}, headers={"X-Role": "buyer"})
     assert response.status_code == 200 and calls[-1][1] == "nvidia"
+    calls.clear()
+    response = c.post("/api/v1/input/image", files={"file": ("x.png", picture())}, headers={"X-Role": "buyer"})
+    assert response.status_code == 200 and calls[-1][1] == "nvidia"
+    calls.clear()
+    response = c.post("/api/v1/input/image?cloud_consent=false", files={"file": ("x.png", picture())}, headers={"X-Role": "buyer"})
+    assert response.status_code == 422 and not calls
+    response = c.post("/api/v1/input/image?provider=local&cloud_consent=false", files={"file": ("x.png", picture())}, headers={"X-Role": "buyer"})
+    assert response.status_code == 200 and calls[-1][1] == "local"
 
 
 @pytest.mark.parametrize("files,status", [
@@ -156,6 +166,79 @@ def test_vision_output_is_schema_validated_not_executed(monkeypatch):
     ))
     with pytest.raises(UpstreamError):
         multimodal.extract_image_cloud(picture())
+
+
+def test_automatic_image_route_tries_nvidia_then_real_local_pipeline_without_provider_error_leak(client, monkeypatch):
+    c, _ = client
+    attempted = []
+
+    def unavailable(*args, **kwargs):
+        attempted.append('nvidia')
+        raise UpstreamError('Authored private provider diagnostics must not reach the customer')
+
+    def local_process(args, **options):
+        attempted.append('local')
+        assert args[1:3] == ['stdin', 'stdout'] and options['env'].get('NVIDIA_API_KEY') is None
+        assert b'Private metadata' not in options['input']
+        with Image.open(io.BytesIO(options['input'])) as clean:
+            assert clean.format == 'JPEG' and max(clean.size) <= 1600 and not clean.getexif()
+        tsv = 'level\tblock_num\tpar_num\tline_num\tconf\ttext\n5\t1\t1\t1\t99\t20 litres milk\n'
+        return SimpleNamespace(returncode=0, stdout=tsv.encode())
+
+    monkeypatch.setattr(multimodal, 'extract_image', REAL_EXTRACT_IMAGE)
+    monkeypatch.setattr(multimodal, 'nvidia_tool', unavailable)
+    monkeypatch.setattr(multimodal.shutil, 'which', lambda name: '/authored/tesseract')
+    monkeypatch.setattr(multimodal.subprocess, 'run', local_process)
+    response = c.post('/api/v1/input/image', files={'file': ('photo.png', picture(metadata=True), 'image/png')}, headers={'X-Role': 'buyer'})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert attempted == ['nvidia', 'local']
+    assert body['text'] == '20 litres milk' and body['review_required']
+    assert 'Local Tesseract' in body['source'] and 'fallback after NVIDIA' in body['source']
+    assert any('fallback' in warning for warning in body['uncertainties'])
+    assert 'private provider diagnostics' not in response.text
+
+
+def test_explicit_local_reader_never_calls_cloud_and_successful_cloud_never_calls_local(monkeypatch):
+    called = []
+
+    def cloud(data):
+        called.append('nvidia')
+        return multimodal.InputTextResponse(text='20 litres milk', uncertainties=[], source='NVIDIA authored', elapsed_ms=2)
+
+    def local(data):
+        called.append('local')
+        return multimodal.InputTextResponse(text='20 litres milk', uncertainties=[], source='Local Tesseract authored', elapsed_ms=1)
+
+    monkeypatch.setattr(multimodal, 'extract_image_cloud', cloud)
+    monkeypatch.setattr(multimodal, 'extract_image_local', local)
+    assert multimodal.extract_image(picture(), 'local').source == 'Local Tesseract authored'
+    assert called == ['local']
+    called.clear()
+    assert multimodal.extract_image(picture(), 'nvidia').source == 'NVIDIA authored'
+    assert called == ['nvidia']
+
+
+def test_both_image_readers_unavailable_returns_actionable_generic_error(monkeypatch):
+    def unavailable(*args):
+        raise UpstreamError('Private engine configuration detail')
+
+    monkeypatch.setattr(multimodal, 'extract_image_cloud', unavailable)
+    monkeypatch.setattr(multimodal, 'extract_image_local', unavailable)
+    with pytest.raises(UpstreamError) as failure:
+        multimodal.extract_image(picture(), 'nvidia')
+    assert str(failure.value) == 'The image could not be read right now. Try a clearer image or type the request.'
+
+
+def test_automatic_reader_retains_pixel_defense_before_cloud_or_fallback(monkeypatch):
+    def must_not_run(*args, **kwargs):
+        raise AssertionError('Invalid images must never reach either reader')
+
+    monkeypatch.setattr(multimodal, 'nvidia_tool', must_not_run)
+    monkeypatch.setattr(multimodal, 'extract_image_local', must_not_run)
+    with pytest.raises(HTTPException) as failure:
+        multimodal.extract_image(picture((4001, 3000)), 'nvidia')
+    assert failure.value.status_code == 413 and failure.value.detail['code'] == 'image_dimensions'
 
 
 def test_audio_decode_duration_silence_and_container_limits():

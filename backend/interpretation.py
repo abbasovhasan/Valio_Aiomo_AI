@@ -15,15 +15,17 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from .config import MODEL
 from . import catalog
 from .upstream import UpstreamError
+from .preferences import DietaryRestriction, dietary_from_text
 
 
 class Item(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str | None = None
-    query: str = Field(min_length=1, max_length=120)
+    query: str = Field(min_length=1, max_length=200)
     quantity: Decimal = Field(gt=0, le=100000, max_digits=12, decimal_places=4)
     unit: Literal["L", "kg", "pieces", "packages"]
-    dietary: list[Literal["lactose_free", "gluten_free", "vegetarian", "vegan"]] = Field(default_factory=list, max_length=4)
+    dietary: list[DietaryRestriction] = Field(default_factory=list, max_length=20, description="Hard declared restrictions. Milk allergy is milk_free, never lactose_free. Missing supplier absence/certification evidence must block, not establish safety.")
+    excluded_ingredients: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(default_factory=list, max_length=8, description="Additional hard ingredient exclusions; never downgrade an allergy to a preference or infer verified absence.")
     origin: Literal["finland", "eu"] | None = None
     max_unit_price: Decimal | None = Field(default=None, ge=0, le=100000)
     required_brand: str | None = Field(default=None, min_length=1, max_length=80)
@@ -102,6 +104,25 @@ def _preferences(text, result):
             result["ambiguous_fields"].append("Specify a catalog brand or compare the product cards; the requested brand preference could not be identified.")
 
 
+def _dietary_constraints(text, result):
+    """Apply standalone restrictions to targets without merging recipe cohorts."""
+    for clause in re.split(r"[;.\n]|(?<!\d),(?!\d)", text):
+        diets = dietary_from_text(clause)
+        if not diets:
+            continue
+        measured = re.search(r"(?<![\w.])" + NUM + r"\s*(?:" + UNIT + r")\b", clause, re.I)
+        safety_clause = re.search(r"allerg|\b(?:no|avoid|exclude|free from)\b", clause, re.I)
+        if result.get("recipe_request") and not safety_clause:
+            # The reviewed recipe allocator owns its distinct dietary cohorts.
+            continue
+        if measured and not safety_clause:
+            # Dietary adjectives in a measured list belong to their own line.
+            continue
+        targets = result["items"] if re.search(r"allerg", clause, re.I) else _targets(clause, result["items"])
+        for item in targets:
+            item["dietary"] = list(dict.fromkeys(item.get("dietary", []) + diets))
+
+
 def _unit(raw):
     raw = raw.casefold()
     if raw in {"g", "gram", "grams", "ml", "millilitre", "millilitres", "milliliter", "milliliters"}:
@@ -166,13 +187,19 @@ def _constraints(text, result):
             result["delivery_date"] = (_today() + timedelta(days=1)).isoformat()
     if re.search(r"\b(?:usd|dollars?|gbp|pounds?)\b|\$|£", low):
         result["ambiguous_fields"].append("Only EUR pricing is supported. Please provide a EUR budget.")
-    if re.search(r"allerg(?:y|ies|ic)|nut.free|egg.free|dairy.free|milk.free", low):
-        result["ambiguous_fields"].append("This request includes an allergy or unsupported dietary restriction. Supplier evidence and a revised supported requirement are needed; lactose-free does not mean milk-allergy safe.")
+    if re.search(r"allerg(?:y|ies|ic)", low):
+        allergy_text = re.sub(r"\b(?:lactose|gluten|milk|dairy|peanut|nut|egg|soy|fish)[- ]free\b|\bvegetarian\b|\bvegan\b|\bhalal\b|\bkosher\b", "", low)
+        if not dietary_from_text(allergy_text):
+            result["ambiguous_fields"].append("Which allergen must be excluded? Choose the specific allergen; missing supplier evidence will block confirmation.")
+        result["notes"].append("Allergen exclusions require explicit supplier evidence. Lactose-free does not mean milk-allergy safe; missing or trace-risk evidence cannot establish compliance.")
+    for free_requirement in re.finditer(r"\b([a-z]+(?:[- ](?:nuts?|dioxide|seeds?))?)[- ]free\b", low):
+        if not dietary_from_text(free_requirement[0]):
+            result["ambiguous_fields"].append("The requested " + free_requirement[0] + " restriction needs explicit supplier evidence. Add it to ingredient exclusions or choose a supported verified requirement.")
     if re.search(r"(?:prefer|ideally)\s+(?:finnish|finland)", low):
         result["notes"].append("Finnish origin is a preference; check declared origins when choosing products.")
     if re.search(r"\bfat content\b", low):
         result["ambiguous_fields"].append("Specify the required fat content in the product search and review the supplier's declared product specifications.")
-    return bool(money or iso or re.search(r"\bcheap(?:er|est)\b|most affordable|lowest (?:price|cost)|price first|quality first|origin first|delivery first|earliest delivery|fastest delivery|(?:by|before|on|for|next)\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|tomorrow", low))
+    return bool(money or iso or dietary_from_text(low) or re.search(r"\bcheap(?:er|est)\b|most affordable|lowest (?:price|cost)|price first|quality first|origin first|delivery first|earliest delivery|fastest delivery|(?:by|before|on|for|next)\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|tomorrow", low))
 
 
 def _recipe(text, result):
@@ -243,6 +270,7 @@ def _local(text, prior):
         result["ambiguous_fields"] = [x for x in result["ambiguous_fields"] if not any(key in x for key in ["bolognese", "servings", "diners", "Dietary"]) ]
         _recipe(recipe_text, result)
         _preferences(text, result)
+        _dietary_constraints(text, result)
         return result
     matches = [m for m in re.finditer(r"(?<![\w.])(" + NUM + r")\s*(" + UNIT + r")\b\s*(?:of\s+)?", text, re.I)
                if not re.search(r"(?:\bper|/)\s*$", text[:m.start()], re.I)]
@@ -252,14 +280,16 @@ def _local(text, prior):
         label = re.split(r"\s+(?:by|before|delivered|delivery|budget|under|within|please|prefer|with a|my budget|for delivery|and everything|stay|at most|no more than|maximum|max price|up to|below)\b|[;\n.!?]", full_label, maxsplit=1, flags=re.I)[0]
         label = re.sub(r"(?:,?\s+and|,)\s*$", "", label).strip(" ,:")
         label = re.sub(r"\s+(?:to|instead|please)$", "", label, flags=re.I)
-        if not label or len(label) > 120:
+        if not label or len(label) > 200:
             result["ambiguous_fields"].append("Name the product after each quantity, for example '20 litres of milk'.")
             continue
         normalized, scale = _unit(match[2])
         qty = number(match[1]) / 1000 if scale == D(".001") else number(match[1])
-        diets = [key for pattern,key in [(r"lactose[- ]free", "lactose_free"),(r"gluten[- ]free", "gluten_free"),(r"\bvegetarian\b","vegetarian"),(r"\bvegan\b","vegan")] if re.search(pattern,label,re.I)]
+        query_label = re.split(r"\s+(?:with|for)\s+(?=[^.;]*\ballerg(?:y|ies)\b)|,\s*(?=[^.;]*\ballerg(?:y|ies)\b)", label, maxsplit=1, flags=re.I)[0]
+        diets = dietary_from_text(query_label)
         brands = _brands(label)
-        query = re.sub(r"\b(?:lactose[- ]free|gluten[- ]free|vegetarian|vegan|finnish|organic|eu[- ]only)\b", "", label, flags=re.I).strip()
+        query = re.sub(r"\b(?:(?:lactose|gluten|milk|dairy|peanut|nut|egg|soy|soya|fish|crustacean|mollusc|celery|mustard|sesame|sulphite|lupin)[- ]free|vegetarian|vegan|halal|kosher|finnish|organic|eu[- ]only)\b", "", query_label, flags=re.I).strip()
+        query = re.sub(r"\b(?:no|without|avoid|exclude)\s+pork\b|\bpork[- ]free\b", "", query, flags=re.I).strip()
         if brands:
             query = re.sub(r"(?<!\w)" + re.escape(brands[0]) + r"(?!\w)", "", query, flags=re.I)
             query = re.sub(r"\b(?:from|brand)\b", "", query, flags=re.I)
@@ -330,6 +360,7 @@ def _local(text, prior):
     if re.search(r"\band\s+(?!\d|everything\b|make\b|stay\b)(?:some|a few|butter\b|cheese\b|milk\b|eggs?\b)", text, re.I):
         result["ambiguous_fields"].append("An additional item has no clear quantity and unit. Please specify them.")
     _preferences(text, result)
+    _dietary_constraints(text, result)
     if not result["items"] and not result["ambiguous_fields"]:
         result["ambiguous_fields"].append("Which products, quantities and units do you need? For example, '20 litres of milk'.")
     return result
@@ -373,6 +404,7 @@ def interpret(text, prior=None, use_model=False):
         # These text-grounded declarations do not establish product suitability.
         _constraints(text, data)
         _preferences(text, data)
+        _dietary_constraints(text, data)
         literals = _local(text, None)
         for literal in literals["items"]:
             matches = [item for item in data["items"]
@@ -390,6 +422,7 @@ def interpret(text, prior=None, use_model=False):
                 if removed:
                     match["dietary"] = list(dict.fromkeys(match.get("dietary", []) + previous.get("dietary", [])))
                     data.setdefault("ambiguous_fields", []).append("A previous dietary requirement was retained. Start a new request if the dietary mandate has changed.")
+                match["excluded_ingredients"] = list(dict.fromkeys(match.get("excluded_ingredients", []) + previous.get("excluded_ingredients", [])))
                 for field in ["origin", "required_brand", "max_unit_price", "require_organic"]:
                     if previous.get(field) and not match.get(field):
                         match[field] = previous[field]

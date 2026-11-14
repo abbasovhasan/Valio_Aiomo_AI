@@ -152,7 +152,7 @@ def verify(base, live):
             smoke.request(public, "GET", CARTS + "/not-owned", expected=401)
             smoke.checked("Private cart requires authentication", True)
             policy = health.headers.get("permissions-policy", "")
-            smoke.checked("Camera disabled and same-origin microphone allowed", "camera=()" in policy and "microphone=(self)" in policy)
+            smoke.checked("Same-origin camera and microphone allowed", "camera=(self)" in policy and "microphone=(self)" in policy)
             schema = smoke.data(public, "GET", "/openapi.json")
             refs = schema["paths"]
             ref = refs[CARTS]["post"]["responses"]["200"]["content"]["application/json"]["schema"].get("$ref", "")
@@ -255,7 +255,7 @@ def verify(base, live):
             smoke.report["audio"] = {"source": speech["source"], "elapsed_ms": speech["elapsed_ms"], "required_terms_verified": ["milk", "butter"]}
             with image.open("rb") as file:
                 refused = smoke.request(a, "POST", API + "/input/image?provider=nvidia&cloud_consent=false", expected=422, files={"file": ("fixture.png", file, "image/png")})
-            smoke.checked("Cloud OCR requires explicit consent", refused.json().get("detail", {}).get("code") == "cloud_consent_required")
+            smoke.checked("Explicit cloud OCR denial prevents external reading", refused.json().get("detail", {}).get("code") == "cloud_consent_required")
             with image.open("rb") as file:
                 smoke.request(a, "POST", API + "/input/image", expected=403, headers={"Origin": "https://unrelated.example"}, files={"file": ("fixture.png", file, "image/png")})
             smoke.checked("Cross-origin authenticated uploads are rejected", True)

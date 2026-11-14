@@ -157,16 +157,15 @@ export function MealPlanner({
   return (
     <section className="meal-planner">
       <div className="planner-intro">
-        <div className="eyebrow">FROM KITCHEN NEED TO SHOPPING PLAN</div>
-        <h2>Start with the meal.</h2>
+        <h2>Meal planner</h2>
         <p>
-          Spaghetti bolognese for 500 people, with a lentil alternative. Set the
-          portions, review the recipe, then compare ingredient candidates.
+          Scale bolognese and a lentil alternative. Review quantities before
+          quoting the ingredients.
         </p>
       </div>
       <div className="planner-grid">
         <form className="paper planner-form" onSubmit={generate}>
-          <h3>Who are we cooking for?</h3>
+          <h3>Diners</h3>
           <p>
             Vegetarian and gluten-free totals include diners who need both. Each
             diner is counted once.
@@ -284,25 +283,21 @@ export function MealPlanner({
         <div className="planner-results">
           {!plan ? (
             <div className="paper planner-empty">
-              <h3>A meal is more than one SKU.</h3>
+              <h3>Shopping plan</h3>
               <p>
-                Get scaled ingredient needs, separate dietary cohorts, and up to
-                three catalog candidates per ingredient. The chef chooses
-                products after checking purpose and dietary evidence.
+                Build a plan to review ingredient quantities, dietary groups
+                and catalog options. The chef checks product purpose and dietary evidence.
               </p>
               <p>
-                Planning uses the local challenge catalog. Prices and
-                date-specific availability come later; no shared webshop basket
-                is changed.
+                Prices and date-specific availability are checked when quoted.
+                Planning does not change a supplier basket.
               </p>
             </div>
           ) : (
             <>
               <div className="paper planner-summary">
-                <span className="eyebrow">
-                  DRAFT SHOPPING PLAN · CHEF REVIEW REQUIRED
-                </span>
-                <h3>Every diner counted once.</h3>
+                <p>Draft plan · chef review required.</p>
+                <h3>Dietary groups</h3>
                 <div className="cohort-grid">
                   {Object.entries(plan.cohorts).map(([key, value]) => (
                     <div key={key}>
@@ -328,17 +323,16 @@ export function MealPlanner({
                 </button>
               </div>
               {onQuoteSession && <form className="paper planner-summary planner-quote" onSubmit={quotePlan}>
-                <span className="eyebrow">CONTINUE TO THE PURCHASING WORKSPACE</span>
-                <h3>Turn this recipe into a quoted basket.</h3>
-                <p>Keep your ingredient quantities, dietary groups and selected candidates. The purchasing workspace consolidates shared products, checks prices and availability, and highlights any requirements still unresolved.</p>
+                <h3>Quote shopping plan</h3>
+                <p>Quantities, dietary groups and selections carry into Smart order. Shared products are consolidated, then prices, availability and unresolved requirements are checked.</p>
                 <div className="planner-quote-fields">
-                  <label>Requested delivery<input name="delivery_date" aria-label="Meal plan delivery date" type="date" required value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} disabled={quoting || dirty} /></label>
+                  <label>Requested delivery<input name="delivery_date" aria-label="Meal plan delivery date" type="date" required value={quoteDate} onInput={(e) => setQuoteDate(e.currentTarget.value)} onChange={(e) => setQuoteDate(e.target.value)} disabled={quoting || dirty} /></label>
                   <label>Maximum budget (€)<input name="budget" aria-label="Meal plan maximum budget" type="number" min="0" step="0.01" placeholder="Optional" value={quoteBudget} onChange={(e) => setQuoteBudget(e.target.value)} disabled={quoting || dirty} /></label>
                   <label>Quotation source<select value={quoteMode} onChange={(e) => setQuoteMode(e.target.value)} disabled={quoting || dirty}><option value="fixture">Rehearsal fixture · authored prices & stock</option><option value="live">Live Valio sponsor sandbox</option></select></label>
                 </div>
                 {quoteError && <p className="planner-error" role="alert">{quoteError}</p>}
                 <button className="primary-button" type="submit" disabled={dirty || quoting || role === "approver"}>{quoting ? "Checking the shopping plan…" : "Quote this shopping plan"}</button>
-                <p>Some or all candidates can remain unselected. You can refine each product search in the purchasing workspace. Recipe and dietary review is still required before simulated confirmation.</p>
+                <p>Products can remain unselected and be refined in Smart order. Recipe and dietary review is required before simulated confirmation.</p>
               </form>}
               {plan.lines.map((line, i) => (
                 <article
@@ -420,16 +414,14 @@ export function MealPlanner({
             </>
           )}
           <div className="paper planner-summary">
-            <h3>The B2B purchasing journey</h3>
+            <h3>Simulation limits</h3>
             <p>
-              An existing customer contract comes first. The worker described
-              invoices usually being sent after delivery; the customer's actual
-              contract determines payment terms.
+              Real purchasing requires an existing supplier contract, which
+              determines invoice and payment terms.
             </p>
             <p>
-              This demo uses a synthetic customer account and produces simulated
-              receipts. It does not perform credit checks, create contracts,
-              issue invoices or take payment.
+              This prototype uses a synthetic customer account and simulated receipts.
+              It does not perform credit checks, create contracts, issue invoices or take payment.
             </p>
           </div>
         </div>

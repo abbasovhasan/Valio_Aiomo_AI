@@ -3547,3 +3547,12 @@ h1 em {
     padding: 18px;
   }
 }
+/* Shared header: customer destinations first; technical tools are opt-in. */
+.operator-menu { position:relative; font-size:11px; color:#53634d; }
+.operator-menu > summary { cursor:pointer; white-space:nowrap; padding:8px; }
+.operator-menu > div { position:absolute; right:0; top:100%; z-index:25; min-width:210px; background:#fff; border:1px solid #d7dfcc; border-radius:5px; padding:7px; box-shadow:0 8px 24px #1c352218; }
+.operator-menu button { display:block; width:100%; padding:10px; text-align:left; font-size:12px; border-radius:3px; }
+.operator-menu button:hover { background:#f1f5eb; }
+.topbar { height:78px; gap:32px; }
+main { padding-top:26px; }
+@media(max-width:760px) { .topbar { gap:12px; } .operator-menu > summary { font-size:10px; } .topbar-right { gap:5px; } }

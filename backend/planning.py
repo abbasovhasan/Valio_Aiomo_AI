@@ -57,17 +57,22 @@ def pack_kg(p):
     return D(mass) if mass else None
 
 
-def candidates(query, kg, gf, origin):
+def candidates(query, kg, gf, origin, dietary=None, excluded_ingredients=None):
     out = []
     # Preserve shared ingredient-purpose ranking before checking dietary evidence.
     # Names propose candidates; the chef still reviews every recipe choice.
-    for p in product_facts.search(query, 20, ["gluten_free"] if gf else [], origin):
+    restrictions = list(dict.fromkeys((["gluten_free"] if gf else []) + list(dietary or [])))
+    for p in product_facts.search(query, 20, restrictions, origin):
+        if p.get("purpose_review_required"):
+            # A raw recipe ingredient is an explicit purpose constraint. The
+            # complete catalog search still exposes these prepared products.
+            continue
         cs = set(p.get("claims", []))
         countries = p.get("origin_codes", [])
         gf_ok = "FREE_FROM_GLUTEN" in cs
         mass = D(p["kg_per_sales_unit"]) if p.get("kg_per_sales_unit") else None
         units = product_facts.units_for(p, kg, "kg")
-        issues = product_facts.suitability(p, ["gluten_free"] if gf else [], origin)
+        issues = product_facts.suitability(p, restrictions, origin, excluded_ingredients=excluded_ingredients)
         if units is None:
             issues.append("Fixed net mass / lot conversion unavailable.")
             issues.extend(p.get("conversion_issues", []))
@@ -96,7 +101,7 @@ def candidates(query, kg, gf, origin):
     return out[:3]
 
 
-def plan(data: MealInput):
+def plan(data: MealInput, dietary=None, excluded_ingredients=None):
     r = data.recipe
     n = data.servings
     veg = data.vegetarian
@@ -115,7 +120,7 @@ def plan(data: MealInput):
                 "required_kg": str(kg),
                 "gluten_free_required": gf,
                 "meat_origin": origin,
-                "candidates": candidates(query, kg, gf, origin),
+                "candidates": candidates(query, kg, gf, origin, dietary, excluded_ingredients),
             }
         )
 

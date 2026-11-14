@@ -8,6 +8,8 @@ import {
 import "./procurement.css";
 import { PreferencesPanel } from "./PreferencesPanel";
 import { MultimodalInput } from "./MultimodalInput";
+import { ProductWorkspace } from "./ProductWorkspace";
+import { HistoryPanel } from "./HistoryPanel";
 
 type API = (path: string, options?: RequestInit) => Promise<any>;
 type ProductDetails = {
@@ -32,6 +34,7 @@ type Candidate = {
   match_method?: string; match_reason?: string; requires_explicit_choice?: boolean;
   price_per_requested_unit?: string | null; comparison_delta?: string | null; comparison_note?: string;
   available_sales_units?: string | null; issue_codes?: string[];
+  eligibility_issues?: string[]; quote_issues?: string[]; selectable?: boolean;
 };
 type Line = {
   id: string; requested_label: string; quantity: string; unit: string; status: string;
@@ -41,6 +44,7 @@ type Line = {
   require_organic?: boolean; preferred_organic?: boolean;
 };
 type CartItem = {
+  line_ids?: string[];
   id: string; name: string; quantity_sales_units: string; effective_quantity?: string;
   unit?: string; unit_price?: string | null; line_total?: string | null; sales_unit?: string;
   quantity_breakdown?: { unit: string; requested_quantity: string; effective_quantity: string; surplus_quantity: string; includes_converted_requirements?: boolean }[];
@@ -72,7 +76,7 @@ const examples = [
   { label: "A simple milk order", text: "I need 1,000 litres of lactose-free milk delivered by Monday. Choose the most affordable suitable option." },
   { label: "Bolognese for 500 diners", text: "I need ingredients for spaghetti bolognese for 500 people. 20% vegetarian and 10% gluten-free, with an overlap: 20 diners. Delivered by Monday. Prefer Finnish ingredients." },
 ];
-const money = (value: unknown) => value == null ? "Not quoted" : new Intl.NumberFormat("en-FI", { style: "currency", currency: "EUR" }).format(Number(value));
+const money = (value: unknown) => value == null ? "Requires quote" : new Intl.NumberFormat("en-FI", { style: "currency", currency: "EUR" }).format(Number(value));
 const amount = (value: unknown) => value == null ? "Unknown" : new Intl.NumberFormat("en-FI", { maximumFractionDigits: 3 }).format(Number(value));
 function readable(value: unknown): string {
   if (value == null) return "Unknown";
@@ -204,6 +208,9 @@ function CandidateChoices({ line, renderCandidate }: { line: Line; renderCandida
   </div>;
 }
 
+const allergenLabels: Record<string, string> = {
+  AM: "Milk", AP: "Peanuts", AN: "Tree nuts", AE: "Eggs", AY: "Soy", AF: "Fish", AC: "Crustaceans", UM: "Molluscs", BC: "Celery", BM: "Mustard", AS: "Sesame", AU: "Sulphites", NL: "Lupin", AW: "Gluten-containing cereals", PO: "Pork",
+};
 function ProductEvidence({ candidate }: { candidate: Candidate }) {
   const product = candidate.product_details || candidate.product || {};
   const attributes = candidate.attributes && !Array.isArray(candidate.attributes) ? candidate.attributes : {};
@@ -219,7 +226,7 @@ function ProductEvidence({ candidate }: { candidate: Candidate }) {
     </dl>
     <h5>Ingredients & allergen evidence</h5>
     <p className="proc-evidence-text">{product.ingredients || "Ingredient information was not supplied."}</p>
-    {product.allergens?.length ? <ul className="proc-allergen-list">{product.allergens.map((allergen, i) => <li key={i}><strong>{allergen.name || (allergen.id === "AM" ? "Milk (AM)" : `Supplier allergen code ${allergen.id || "unknown"}`)}</strong><span>{allergen.unit ? allergen.unit.replaceAll("_", " ").toLowerCase() : "Relationship not supplied"}</span></li>)}</ul> : <p className="proc-evidence-note">No allergen classification supplied. This does not establish allergen absence.</p>}
+    {product.allergens?.length ? <ul className="proc-allergen-list">{product.allergens.map((allergen, i) => <li key={i}><strong>{allergen.name ? `${allergen.name}${allergen.id ? ` (${allergen.id})` : ""}` : allergen.id && allergenLabels[allergen.id] ? `${allergenLabels[allergen.id]} (${allergen.id})` : `Supplier allergen code ${allergen.id || "unknown"}`}</strong><span data-declaration={allergen.unit}>{allergen.unit ? allergen.unit.replaceAll("_", " ").toLowerCase() : "Relationship not supplied"}</span></li>)}</ul> : <p className="proc-evidence-note">No allergen classification supplied. This does not establish allergen absence.</p>}
     <p className="proc-evidence-note">Check the full ingredient declaration and kitchen preparation needs. Lactose-free does not mean milk-allergy safe. Unlisted allergens remain unknown.</p>
     <h5>Storage</h5>
     <p className="proc-evidence-text">{product.storage || "Storage instructions were not supplied."}</p>
@@ -257,16 +264,18 @@ function OrderReceiptSummary({ receipt }: { receipt: SimulatedReceipt }) {
   </section>;
 }
 
-export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSessionId, buyerId, active = true }: {
-  api: API; role: string | null; onSignIn: () => void; onUpdated?: () => void | Promise<void>; initialSessionId?: string | null; buyerId?: string; active?: boolean;
+export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSessionId, buyerId, active = true, view = "order", onNavigate, demoTools = false }: {
+  api: API; role: string | null; onSignIn: () => void; onUpdated?: () => void | Promise<void>; initialSessionId?: string | null; buyerId?: string; active?: boolean; view?: "order" | "products" | "history"; onNavigate?: (view: "order" | "products" | "history") => void; demoTools?: boolean;
 }) {
   const [session, setSession] = useState<ProcurementSession | null>(null);
   const [message, setMessage] = useState("");
-  const [mode, setMode] = useState("fixture");
+  const [mode, setMode] = useState("live");
   const [useModel, setUseModel] = useState(false);
   const [applyPreferences, setApplyPreferences] = useState(true);
+  const [preferencesVersion, setPreferencesVersion] = useState(0);
   const [deliveryDate, setDeliveryDate] = useState("");
   const [budget, setBudget] = useState("");
+  const [mediaBusy, setMediaBusy] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -274,11 +283,11 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
   const [reviewConfirm, setReviewConfirm] = useState(false);
   const [confirmedReceipt, setConfirmedReceipt] = useState<SimulatedReceipt | null>(null);
   const [verification, setVerification] = useState<{ integrity_valid: boolean; scope_valid: boolean; receipt_id?: string } | null>(null);
-  const [conversationOpen, setConversationOpen] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [clock, setClock] = useState(Date.now());
   const requestKeys = useRef<Record<string, string>>({});
   const composer = useRef<HTMLTextAreaElement>(null);
+  const entryDate = useRef<HTMLInputElement>(null);
+  const entryBudget = useRef<HTMLInputElement>(null);
   const result = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<ProcurementSession | null>(null);
   const importedSession = useRef<string | null>(null);
@@ -343,35 +352,48 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
       method: "POST", body: JSON.stringify({ version: session.version, action: actionName, ...payload }),
     }), actionName === "message");
   }
+  function currentRequirements() {
+    return { date: entryDate.current?.value ?? deliveryDate, budget: entryBudget.current?.value ?? budget };
+  }
+  async function applyRequirements(current: ProcurementSession, date: string, desiredBudget: string) {
+    let next = current;
+    if ((next.constraints.delivery_date || "") !== date) next = await api(`/procurement/sessions/${next.id}/actions`, { method: "POST", body: JSON.stringify({ version: next.version, action: "set_date", date: date || null }) });
+    if (String(next.constraints.budget ?? "") !== desiredBudget) next = await api(`/procurement/sessions/${next.id}/actions`, { method: "POST", body: JSON.stringify({ version: next.version, action: "set_budget", budget: desiredBudget || null }) });
+    return next;
+  }
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!message.trim()) return;
-    if (session) { await action("message", { message: message.trim() }); return; }
-    const fields = new FormData(e.currentTarget as HTMLFormElement);
-    const chosenDate = String(fields.get("initial_date") ?? deliveryDate);
-    const chosenBudget = String(fields.get("initial_budget") ?? budget);
-    const data = await perform("understand", () => api("/procurement/sessions", {
-      method: "POST", body: JSON.stringify({ message: message.trim(), mode, ...(chosenDate ? { date: chosenDate } : {}), ...(chosenBudget ? { budget: chosenBudget } : {}), use_model: useModel, apply_preferences: applyPreferences }),
-    }), true);
+    if (mediaBusy || !message.trim()) return;
+    const requirements = currentRequirements();
+    const data = await perform("understand", async () => {
+      if (session) {
+        const next = await applyRequirements(session, requirements.date, requirements.budget);
+        return api(`/procurement/sessions/${next.id}/actions`, { method: "POST", body: JSON.stringify({ version: next.version, action: "message", message: message.trim() }) });
+      }
+      return api("/procurement/sessions", { method: "POST", body: JSON.stringify({ message: message.trim(), mode, ...(requirements.date ? { date: requirements.date } : {}), ...(requirements.budget ? { budget: requirements.budget } : {}), use_model: useModel, apply_preferences: applyPreferences }) });
+    }, true);
     if (data) result.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   async function updateConstraints(e: FormEvent) {
     e.preventDefault();
-    if (!session) return;
     const fields = new FormData(e.currentTarget as HTMLFormElement);
-    const chosenDate = String(fields.get("delivery_date") ?? "");
-    const chosenBudget = String(fields.get("budget") ?? "");
-    // Each server action recalculates the whole cart and advances its version.
-    setBusy("constraints"); setError(""); setNotice("");
-    try {
-      let current = session;
-      if ((current.constraints.delivery_date || "") !== chosenDate) current = await api(`/procurement/sessions/${current.id}/actions`, { method: "POST", body: JSON.stringify({ version: current.version, action: "set_date", date: chosenDate }) });
-      if (String(current.constraints.budget ?? "") !== chosenBudget) current = await api(`/procurement/sessions/${current.id}/actions`, { method: "POST", body: JSON.stringify({ version: current.version, action: "set_budget", budget: chosenBudget || null }) });
-      accept(current); setNotice("Budget and delivery requirements updated. All affected products were checked again.");
-    } catch (e) {
-      setError((e as Error).message);
-      try { accept(await api(`/procurement/sessions/${session.id}`)); } catch { /* Keep the current cart available. */ }
-    } finally { setBusy(""); }
+    const chosenDate = String(fields.get("delivery_date") ?? deliveryDate);
+    const chosenBudget = String(fields.get("budget") ?? budget);
+    setDeliveryDate(chosenDate); setBudget(chosenBudget);
+    if (!session || session.receipt) return;
+    await perform("constraints", () => applyRequirements(session, chosenDate, chosenBudget));
+  }
+  async function addCatalogProduct(productId: string, quantity: string, unit: string) {
+    if (role !== "buyer") { onSignIn(); return false; }
+    const requirements = currentRequirements();
+    const data = await perform("add_product", async () => {
+      if (session && !session.receipt) {
+        const next = await applyRequirements(session, requirements.date, requirements.budget);
+        return api(`/procurement/sessions/${next.id}/actions`, { method: "POST", body: JSON.stringify({ version: next.version, action: "add_product", product_id: productId, quantity, unit }) });
+      }
+      return api("/procurement/sessions/from-product", { method: "POST", body: JSON.stringify({ product_id: productId, quantity, unit, ...(requirements.date ? { date: requirements.date } : {}), ...(requirements.budget ? { budget: requirements.budget } : {}), mode: demoTools ? mode : "live", apply_preferences: applyPreferences }) });
+    });
+    return Boolean(data);
   }
   async function approve() {
     if (!session?.offer) return;
@@ -402,7 +424,7 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
   }
   function startNew() {
     setSession(null); remember(null, buyerId || session?.buyer_id); setMessage(""); setConfirmedReceipt(null);
-    setBudget(""); setDeliveryDate(""); setUseModel(false); setDetails(null);
+    setBudget(""); setDeliveryDate(""); setUseModel(false); setDetails(null); if (!demoTools) setMode("live");
     setError(""); setNotice(""); setReviewConfirm(false); setVerification(null); composer.current?.focus();
   }
   const receipt = confirmedReceipt || session?.receipt;
@@ -419,6 +441,7 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
   const isWorking = Boolean(busy);
   function renderCandidate(line: Line, candidate: Candidate) {
                   const selected = line.selected_product_id === candidate.id;
+                  const blocked = candidate.selectable === false || Boolean(candidate.eligibility_issues?.length) || (candidate.selectable === undefined && !candidate.eligibility_issues && Boolean(candidate.issues?.length));
                   return <div className={`proc-candidate ${selected ? "selected" : ""}`} key={candidate.id}>
                     <div className="proc-product-top"><span className="proc-product-icon"><Package size={23} strokeWidth={1.2} /></span><span className={`proc-selection ${selected ? "selected" : ""}`}>{selected && <Check size={12} />}{selected ? "Selected" : "Alternative"}</span></div>
                     <h4>{candidate.name}</h4><p className="proc-sku">SKU {candidate.id}</p>{candidate.match_reason && <p className="proc-match-reason">{candidate.match_reason}</p>}{candidate.requires_explicit_choice && !selected && <p className="proc-explicit-choice">Related option · your choice required</p>}
@@ -426,63 +449,65 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
                     {candidate.issues?.length ? <p className="proc-candidate-warning">{readable(candidate.issues[0])}</p> : <p className="proc-product-available"><Check size={13} />{candidate.availability == null ? "Stock not verified" : readable(candidate.availability)}{candidate.delivery_date && ` · ${dateLabel(candidate.delivery_date)}`}</p>}
                     {candidate.surplus_quantity != null && Number(candidate.surplus_quantity) > 0 && <p className="proc-pack-surplus"><Package size={13} /><span><strong>{amount(candidate.surplus_quantity)} {line.unit} extra</strong> from whole packs</span></p>}
                     {candidate.comparison_delta != null && !selected && <p className={`proc-price-comparison ${Number(candidate.comparison_delta) < 0 ? "saves" : ""}`}><strong>Basket change: {money(candidate.comparison_delta)}</strong><span>{candidate.comparison_note || "Compared with the currently selected product, after whole-pack rounding."}</span></p>}
-                    <div className="proc-product-bottom"><strong>{money(candidate.line_total)}<small>line total</small></strong><button className={selected ? "selected" : ""} disabled={isWorking || !canEdit || selected || Boolean(candidate.issues?.length)} onClick={() => action("select_product", { line_id: line.id, product_id: candidate.id })}>{selected ? <Check size={15} /> : <Plus size={15} />}{selected ? "Selected" : candidate.issues?.length ? "Blocked" : "Choose"}</button></div>
+                    <div className="proc-product-bottom"><strong>{money(candidate.line_total)}<small>line total</small></strong><button className={selected ? "selected" : ""} disabled={isWorking || !canEdit || selected || blocked} onClick={() => action("select_product", { line_id: line.id, product_id: candidate.id })}>{selected ? <Check size={15} /> : <Plus size={15} />}{selected ? "Selected" : blocked ? "Unavailable" : "Choose"}</button></div>
                     <button className="proc-details-toggle" onClick={() => setDetails(details === `${line.id}-${candidate.id}` ? null : `${line.id}-${candidate.id}`)} aria-expanded={details === `${line.id}-${candidate.id}`}>Product evidence<ChevronDown size={12} /></button>
                     {details === `${line.id}-${candidate.id}` && <ProductEvidence candidate={candidate} />}
                   </div>;
                   }
   return (
     <section className="procurement" aria-label="AI purchasing assistant">
-      <div className="procurement-heading">
-        <div><span className="eyebrow">YOUR KITCHEN. ONE CLEAR CART.</span><h2>Tell us what <em>you need.</em></h2><p>Describe the order. Compare real catalog products. Review every quantity before confirming.</p></div>
-        {session && <button className="proc-new" onClick={startNew} disabled={isWorking}><Plus size={16} /> New request</button>}
-      </div>
-      <div className="procurement-grid">
+      <div className="procurement-heading"><h1>{view === "products" ? "Products" : view === "history" ? "History" : "Smart order"}</h1>{session && view !== "history" && <button className="proc-new" onClick={startNew} disabled={isWorking}><Plus size={16} />New request</button>}</div>
+      <div className={`procurement-grid ${view === "history" ? "is-history" : ""}`}>
         <div className="proc-main">
+          {view !== "history" && <form className="proc-entry-constraints" onSubmit={updateConstraints}><label>Delivery date<input ref={entryDate} name="delivery_date" aria-label="Delivery date before ordering" type="date" value={deliveryDate} onInput={(e) => setDeliveryDate(e.currentTarget.value)} onChange={(e) => setDeliveryDate(e.target.value)} disabled={isWorking || role === "approver" || (view === "order" && !canEdit)} /></label><label>Maximum budget (€)<input ref={entryBudget} name="budget" aria-label="Budget before ordering" type="number" min="0" step="0.01" placeholder="Optional" value={budget} onChange={(e) => setBudget(e.target.value)} disabled={isWorking || role === "approver" || (view === "order" && !canEdit)} /></label>{session && !session.receipt && <button type="submit" disabled={isWorking || role !== "buyer"}>Apply</button>}</form>}
+          {demoTools && view !== "history" && <details className="proc-demo-tools"><summary>Demo settings</summary><label>Quotation source<select value={mode} onChange={(e) => setMode(e.target.value)} disabled={Boolean(session) || isWorking}><option value="live">Live sponsor sandbox</option><option value="fixture">Authored fixture prices & stock</option></select></label><label className="proc-model"><input type="checkbox" checked={useModel} onChange={(e) => setUseModel(e.target.checked)} disabled={Boolean(session) || isWorking} />Use NVIDIA for nonconfidential demo requests</label>{useModel && <p>This request and prior product requirements are sent to NVIDIA's trial service. Nonconfidential demonstration content only.</p>}</details>}
+          <div hidden={view !== "products"}><ProductWorkspace active={view === "products"} api={api} role={role} onSignIn={onSignIn} date={deliveryDate} mode={mode} applyPreferences={applyPreferences} disabled={isWorking} getRequirements={currentRequirements} onAdd={addCatalogProduct} preferencesVersion={preferencesVersion} renderEvidence={(product) => <ProductEvidence candidate={product as Candidate} />} /></div>
+          {view === "history" && <HistoryPanel api={api} role={role} onSignIn={onSignIn} date={deliveryDate} budget={budget} mode={mode} onOpen={(next) => { accept(next); onNavigate?.("order"); }} onRemoved={(id) => { if (session?.id === id) startNew(); }} />}
+          {view === "order" && <>
           <form className="proc-composer" onSubmit={submit} aria-busy={busy === "understand" || busy === "message"}>
-            <div className="proc-composer-label"><label htmlFor="procurement-request"><Sparkles size={16} />{session ? "Make a change or ask for another product" : "What does your kitchen need?"}</label><span>PLAIN LANGUAGE WELCOME</span></div>
+            <div className="proc-composer-label"><label htmlFor="procurement-request">{session ? "Make a change or ask for another product" : "What do you need?"}</label></div>
             <textarea id="procurement-request" ref={composer} value={message} onChange={(e) => setMessage(e.target.value)} placeholder={session ? "For example: reduce the butter to 5 kg, or choose the cheaper milk." : "For example: 200 litres of lactose-free milk, 10 kg of butter and 5 kg of cheese delivered by Monday. Show me suitable options."} rows={session ? 2 : 3} maxLength={3000} disabled={isWorking || !canEdit} />
-            <MultimodalInput key={session?.id || "new-request"} api={api} onText={(text) => setMessage((current) => current ? current + "\n" + text : text)} disabled={isWorking || role !== "buyer" || !canEdit} requiresSignIn={role !== "buyer"} active={active} onSignIn={onSignIn} />
+            <MultimodalInput key={session?.id || "new-request"} api={api} onText={(text) => setMessage((current) => current ? current + "\n" + text : text)} onBusyChange={setMediaBusy} disabled={isWorking || role !== "buyer" || !canEdit} requiresSignIn={role !== "buyer"} active={active} onSignIn={onSignIn} onType={() => composer.current?.focus()} />
             {!session && <div className="proc-examples" aria-label="Example purchasing requests">{examples.map((example) => <button type="button" key={example.label} onClick={() => { setMessage(example.text); composer.current?.focus(); }} disabled={isWorking}><span>{example.label}</span><ArrowUpRight size={13} /></button>)}</div>}
-            <div className="proc-composer-bottom"><button className="proc-settings-toggle" type="button" onClick={() => setShowSettings(!showSettings)} aria-expanded={showSettings}><SlidersHorizontal size={14} />{mode === "live" ? "Live sandbox" : "Rehearsal fixture"}<ChevronDown size={13} /></button><button className="proc-submit" type="submit" disabled={isWorking || !canEdit || !message.trim()}>{busy === "understand" || busy === "message" ? <><LoaderCircle className="spin" size={16} /> Checking your request…</> : <>{session ? "Update my cart" : "Build my cart"}<ArrowRight size={16} /></>}</button></div>
-            {showSettings && <div className="proc-settings"><label>Product price & stock source<select value={mode} onChange={(e) => setMode(e.target.value)} disabled={Boolean(session) || isWorking}><option value="fixture">Rehearsal fixture · authored prices & stock</option><option value="live">Live Valio sponsor sandbox</option></select></label>{!session && <div className="proc-field-pair"><label>Deliver by (optional)<input name="initial_date" aria-label="Initial delivery date" type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} /></label><label>Maximum budget (€)<input name="initial_budget" aria-label="Initial maximum budget" type="number" min="0" step="0.01" placeholder="Optional" value={budget} onChange={(e) => setBudget(e.target.value)} /></label></div>}<label className="proc-model"><input type="checkbox" checked={useModel} onChange={(e) => setUseModel(e.target.checked)} disabled={isWorking || Boolean(session)} />Use NVIDIA for nonconfidential demo requests</label><p>{mode === "fixture" ? "Catalog identities are supplied challenge data. Prices and stock are authored rehearsal values." : "Live price and availability reads use the Valio challenge sandbox. No real supplier order is placed."}{useModel ? " NVIDIA’s trial service receives this request and prior product requirements. Use nonconfidential demonstration content only. The server checks products and calculates prices." : " The local structured parser interprets the request."}{session && " Start a new request to change the source or interpreter."}</p></div>}
+            <div className="proc-composer-bottom"><button className="proc-submit" type="submit" disabled={isWorking || mediaBusy || !canEdit || !message.trim()}>{busy === "understand" || busy === "message" ? <><LoaderCircle className="spin" size={16} />Checking…</> : <>{session ? "Update cart" : "Build cart"}<ArrowRight size={16} /></>}</button></div>
           </form>
-          <PreferencesPanel api={api} role={role} onSignIn={onSignIn} disabled={isWorking} applyToNewRequest={applyPreferences} onApplyChange={setApplyPreferences} hasCart={Boolean(session)} />
+
+          </>}
+          <PreferencesPanel api={api} role={role} onSignIn={onSignIn} disabled={isWorking} applyToNewRequest={applyPreferences} onApplyChange={setApplyPreferences} hasCart={Boolean(session)} onSaved={async (hardChanged) => { if (hardChanged) { setPreferencesVersion((value) => value + 1); if (session && !session.receipt) await action("quote"); } }} />
           {role === "approver" && <div className="proc-notice"><ShieldCheck size={18} /><p>You are signed in as the purchasing approver. Review the saved cart below; sign in as buyer to edit or confirm it.</p></div>}
           {error && <div className="proc-error" role="alert"><div><strong>We could not complete that step.</strong><p>{error}</p></div><button aria-label="Dismiss purchasing error" onClick={() => setError("")}><X size={17} /></button></div>}
           {notice && <div className="proc-notice" role="status"><MessageSquare size={17} /><p>{notice}</p></div>}
-          <div ref={result} className="proc-results" aria-live="polite">
+          {view === "order" && <div ref={result} className="proc-results" aria-live="polite">
             {busy === "restore" && <div className="proc-loading"><LoaderCircle className="spin" size={20} />Reopening your saved cart…</div>}
-            {!session && busy !== "restore" && <div className="proc-empty"><div className="proc-empty-art" aria-hidden="true"><div className="proc-art-orbit" /><div className="proc-art-basket"><ShoppingBasket size={54} strokeWidth={1.1} /><span><Check size={14} /></span></div><span className="proc-art-note note-a">A little less searching.</span><span className="proc-art-note note-b">A lot more clarity.</span></div><div><span className="eyebrow">FROM REQUEST TO READY FOR REVIEW</span><h3>Make room for <em>better buying.</em></h3><p>Package sizes, suitable alternatives, price and availability belong in one place. Your assistant prepares the details; you make the final call.</p></div><div className="proc-empty-steps"><span><b>01</b> Describe the need</span><span><b>02</b> Resolve the choices</span><span><b>03</b> Confirm the cart</span></div></div>}
+
             {session && <>
-              <div className={`proc-response ${ready ? "is-ready" : ""}`}><div className="proc-response-icon">{ready ? <CheckCheck size={20} /> : <MessageSquare size={20} />}</div><div><span className="eyebrow">{receipt ? "SIMULATED ORDER RECORDED" : ready ? "YOUR CART IS READY TO REVIEW" : session.order_status === "CANNOT_FULFILL" ? "LET’S RESOLVE THE REMAINING REQUIREMENTS" : "A FEW DETAILS TO GET RIGHT"}</span><p>{session.assistant_message}</p>{session.interpretation_notes?.filter((note) => !/recipe|illustrative/i.test(note)).map((note, i) => <small key={i}>{note}</small>)}{session.interpretation_source && <small>{session.interpretation_source}</small>}{session.model?.message && <small>{session.model.message}</small>}</div></div>
+              <div className={`proc-response ${ready ? "is-ready" : ""}`}><div className="proc-response-icon">{ready ? <CheckCheck size={20} /> : <MessageSquare size={20} />}</div><div><span className="proc-response-title">{receipt ? "Simulated order recorded" : ready ? "Ready to review" : "Review requirements"}</span><p>{session.assistant_message}</p>{session.interpretation_notes?.filter((note) => !/recipe|illustrative/i.test(note)).map((note, i) => <small key={i}>{note}</small>)}{session.model?.message && <small>{session.model.message}</small>}</div></div>
               {receipt && <OrderReceiptSummary receipt={receipt} />}
-              {session.messages?.length > 0 && <div className="proc-conversation"><button onClick={() => setConversationOpen(!conversationOpen)} aria-expanded={conversationOpen}><MessageSquare size={14} /> Request history <span>{session.messages.length}</span><ChevronDown size={14} /></button>{conversationOpen && <ol>{session.messages.map((entry, i) => <li className={entry.role === "user" ? "from-user" : ""} key={i}><strong>{entry.role === "user" ? "You" : "Purchasing assistant"}</strong><p>{entry.text || entry.content}</p></li>)}</ol>}</div>}
+
               {session.recipe_review_required && <div className="proc-question proc-recipe-review"><span className="eyebrow">CHEF REVIEW</span><h3>Review the proposed recipe before buying.</h3>{session.recipe_notes?.map((note, i) => <p key={i}>{note}</p>)}<p>Check ingredient quantities, dietary groups and your kitchen’s preparation needs. Acknowledgement records your review; it does not certify a recipe or product.</p><button disabled={isWorking || !canEdit} onClick={() => action("acknowledge_recipe")}>I have reviewed the proposed recipe<Check size={14} /></button></div>}
               {questions.filter((q) => !q.line_id && !(session.recipe_review_required && /review and acknowledge.*recipe/i.test(q.prompt))).map((q) => <div className="proc-question" key={q.id}><h3>{q.prompt}</h3>{/how many.*(?:both|overlap)|need both vegetarian/i.test(q.prompt) && <form className="proc-overlap-form" onSubmit={(e) => { e.preventDefault(); const form = new FormData(e.currentTarget); action("message", { message: `${form.get("overlap")} overlap` }); }}><label htmlFor={`overlap-${q.id}`}>Diners who need both diets</label><div><input id={`overlap-${q.id}`} name="overlap" type="number" min="0" max="10000" step="1" required defaultValue="0" disabled={isWorking || !canEdit} /><button type="submit" disabled={isWorking || !canEdit}>Apply overlap<Check size={14} /></button></div><small>Enter 0 if the dietary groups do not overlap.</small></form>}<div>{q.options?.map((o) => <button key={o.id} disabled={isWorking || !canEdit} onClick={() => action(o.action, o.payload || {})}>{o.label}<ArrowRight size={14} /></button>)}</div></div>)}
-              <div className="proc-section-title"><div><span className="eyebrow">THE PRODUCT WORKSPACE</span><h3>{session.lines.length} {session.lines.length === 1 ? "request" : "requests"}, every detail visible.</h3></div><span className="proc-source-tag">{session.mode === "live" ? "LIVE SANDBOX" : "REHEARSAL FIXTURE"}</span></div>
-              {canEdit && session.lines.length > 0 && <p className="proc-workspace-note">Refine a product search to find other candidates. Its quantity, dietary and origin requirements stay in place.</p>}
+              <div className="proc-section-title"><h2>Products <span>{session.lines.length}</span></h2><span className="proc-source-tag">{session.mode === "live" ? "Live quotation" : "Demo prices"}</span></div>
               {session.lines.map((line, index) => <article className="proc-line" key={line.id} aria-label={line.requested_label}>
-                <div className="proc-line-heading"><span className="proc-line-number">{String(index + 1).padStart(2, "0")}</span><div><h3>{line.requested_label}</h3><p>{amount(line.quantity)} {line.unit} requested <span>·</span> {line.selected_product_id ? "Product selected" : line.status.replaceAll("_", " ").toLowerCase()}</p></div>{canEdit && <button className="proc-icon-button" title="Remove this request" aria-label={`Remove ${line.requested_label}`} disabled={isWorking} onClick={() => action("remove_line", { line_id: line.id })}><Trash2 size={16} /></button>}</div>
+                <div className="proc-line-heading"><span className="proc-line-number">{String(index + 1).padStart(2, "0")}</span><div><h3>{line.requested_label}</h3><p>{amount(line.quantity)} {line.unit} requested <span>·</span> {line.issues?.length || line.status === "CONSTRAINT_CONFLICT" ? "Needs review" : line.selected_product_id ? "Product selected" : line.status.replaceAll("_", " ").toLowerCase()}</p></div>{canEdit && <button className="proc-icon-button" title="Remove this request" aria-label={`Remove ${line.requested_label}`} disabled={isWorking} onClick={() => action("remove_line", { line_id: line.id })}><Trash2 size={16} /></button>}</div>
                 {(line.dietary?.length || line.origin || line.max_unit_price != null || line.required_brand || line.preferred_brand || line.preferred_origin || line.require_organic || line.preferred_organic) && <div className="proc-line-constraints" aria-label="Product requirements">{line.dietary?.map((diet) => <span key={diet}>{diet.replaceAll("_", " ")}</span>)}{line.origin && <span>Required origin: {line.origin}</span>}{line.required_brand && <span>Required brand: {line.required_brand}</span>}{line.require_organic && <span>Organic required</span>}{line.preferred_brand && <span className="is-preference">Prefer brand: {line.preferred_brand}</span>}{line.preferred_origin && <span className="is-preference">Prefer origin: {line.preferred_origin}</span>}{line.preferred_organic && <span className="is-preference">Prefer organic</span>}{line.max_unit_price != null && <span>Price limit: {money(line.max_unit_price)} / {line.unit}</span>}</div>}
                 {line.selection_reason && <p className="proc-selection-reason"><Check size={13} />{line.selection_reason}</p>}
-                {canEdit && <form className="proc-query" key={`${line.id}-${line.requested_label}`} onSubmit={(e) => { e.preventDefault(); const form = new FormData(e.currentTarget); action("set_query", { line_id: line.id, query: form.get("query") }); }}><label htmlFor={`query-${line.id}`}>Product search</label><div><input id={`query-${line.id}`} name="query" aria-label={`Search products for ${line.requested_label}`} type="text" maxLength={120} required defaultValue={line.requested_label} disabled={isWorking} /><button type="submit" disabled={isWorking}><Search size={13} />Find products</button></div></form>}
-                <form className="proc-quantity" key={`${line.id}-${line.quantity}`} onSubmit={(e) => { e.preventDefault(); const form = new FormData(e.currentTarget); action("set_quantity", { line_id: line.id, quantity: form.get("quantity"), unit: line.unit }); }}><label htmlFor={`quantity-${line.id}`}>Required quantity</label><div><input id={`quantity-${line.id}`} name="quantity" type="number" min="0.001" max="100000" step="0.001" required defaultValue={line.quantity} disabled={isWorking || !canEdit} /><span>{line.unit}</span><button type="submit" disabled={isWorking || !canEdit}>Update</button></div></form>
+                {canEdit && <form className="proc-query" key={`query-${line.id}-${line.requested_label}`} onSubmit={(e) => { e.preventDefault(); const form = new FormData(e.currentTarget); action("set_query", { line_id: line.id, query: form.get("query") }); }}><label htmlFor={`query-${line.id}`}>Product search</label><div><input id={`query-${line.id}`} name="query" aria-label={`Search products for ${line.requested_label}`} type="text" maxLength={200} required defaultValue={line.requested_label} disabled={isWorking} /><button type="submit" disabled={isWorking}><Search size={13} />Find products</button></div></form>}
+                <form className="proc-quantity" key={`quantity-${line.id}-${line.quantity}`} onSubmit={(e) => { e.preventDefault(); const form = new FormData(e.currentTarget); action("set_quantity", { line_id: line.id, quantity: form.get("quantity"), unit: line.unit }); }}><label htmlFor={`quantity-${line.id}`}>Required quantity</label><div><input id={`quantity-${line.id}`} name="quantity" type="number" min="0.001" max="100000" step="0.001" required defaultValue={line.quantity} disabled={isWorking || !canEdit} /><span>{line.unit}</span><button type="submit" disabled={isWorking || !canEdit}>Update</button></div></form>
                 {!!line.issues?.length && <ul className="proc-issues">{line.issues.map((issue, i) => <li key={i}>{readable(issue)}</li>)}</ul>}
                 {questions.filter((q) => q.line_id === line.id).map((q) => <div className="proc-line-question" key={q.id}><strong>{q.prompt}</strong><div>{q.options?.filter((o) => o.action !== "select_product").map((o) => <button key={o.id} disabled={isWorking || !canEdit} onClick={() => action(o.action, { line_id: line.id, ...(o.payload || {}) })}>{o.label}<ArrowRight size={13} /></button>)}</div></div>)}
-                {!line.candidates.length ? <div className="proc-no-match"><Package size={22} /><p>No suitable catalog candidates were found. Try a different product description, change the requirement, or remove this item.</p></div> : <CandidateChoices key={`${line.id}-${line.requested_label}`} line={line} renderCandidate={(candidate) => renderCandidate(line, candidate)} />}
+                {!line.candidates.length ? <div className="proc-no-match"><Package size={22} /><p>No suitable catalog candidates were found. Try a different product description, change the requirement, or remove this item.</p></div> : <CandidateChoices key={`candidates-${line.id}-${line.requested_label}`} line={line} renderCandidate={(candidate) => renderCandidate(line, candidate)} />}
               </article>)}
               {session.lines.length === 0 && <div className="proc-no-match"><p>Your cart is empty. Describe the products you need in the request box above.</p></div>}
             </>}
-          </div>
+          </div>}
         </div>
-        <aside className="proc-sidebar" aria-label="Shopping cart and order review">
-          <div className="proc-cart"><div className="proc-cart-heading"><ShoppingBasket size={20} /><h3>Your shopping cart</h3><span>{session?.cart.items.length || 0}</span></div>
-            {!session ? <div className="proc-cart-empty"><Package size={32} strokeWidth={1.1} /><p>Good things start<br />with a clear request.</p><small>Your selected products will appear here.</small></div> : <>
-              <div className="proc-cart-source"><span className={session.mode === "live" ? "live" : ""} />{session.mode === "live" ? "Live sandbox quotation" : "Authored rehearsal quotation"}</div>{session.commercial_context && <p className="proc-candidate-warning">{session.commercial_context}</p>}
-              <div className="proc-cart-items">{session.cart.items.length ? session.cart.items.map((item, i) => <div className="proc-cart-item" key={`${item.id}-${i}`}><div><strong>{item.name}</strong><span>{amount(item.quantity_sales_units)} {item.sales_unit || "packs"}</span>{item.quantity_breakdown?.length ? item.quantity_breakdown.map((quantity, j) => <div className="proc-cart-quantity-breakdown" key={j}><span>{amount(quantity.requested_quantity)} {quantity.unit} requested → {amount(quantity.effective_quantity)} {quantity.unit} ordered</span>{Number(quantity.surplus_quantity) > 0 && <em>{amount(quantity.surplus_quantity)} {quantity.unit} extra from whole packs</em>}{quantity.includes_converted_requirements && <small>Includes shared product requirements converted before rounding.</small>}</div>) : item.effective_quantity != null && <span>{amount(item.effective_quantity)} {item.unit || ""} ordered</span>}</div><b>{money(item.line_total)}</b></div>) : <p className="proc-cart-no-items">Choose suitable products to build your cart.</p>}</div>
-              <form className="proc-cart-requirements" onSubmit={updateConstraints}><label>Requested delivery<input type="date" name="delivery_date" aria-label="Cart delivery date" required value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} disabled={isWorking || !canEdit} /></label><label>Maximum budget (€)<input type="number" name="budget" aria-label="Cart maximum budget" min="0" step="0.01" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="No budget set" disabled={isWorking || !canEdit} /></label>{canEdit && <button type="submit" disabled={isWorking}>Apply requirements<ArrowRight size={13} /></button>}</form>
-              <div className="proc-totals">{unresolvedCount > 0 && <p className="proc-cart-partial">Partial cart · {unresolvedCount} {unresolvedCount === 1 ? "request still needs" : "requests still need"} attention.</p>}<div><span>{session.cart.total == null ? "Item subtotal" : "Cart total"}</span><strong>{money(displayedTotal)}</strong></div>{session.constraints.budget != null && <div><span>Budget</span><b>{money(session.constraints.budget)}</b></div>}{session.cart.budget_remaining != null && <div className={negativeBudget ? "over-budget" : "under-budget"}><span>{negativeBudget ? "Budget balance (over)" : "Budget remaining"}</span><b>{money(session.cart.budget_remaining)}</b></div>}{hasUnknownCharges && <p className="proc-candidate-warning">Delivery and service charges are excluded. This simulation confirms the quoted item subtotal only.</p>}<small>Quoted item prices include tax. Availability is an estimate, never a reservation.</small></div>
+        <aside hidden={view === "history"} className="proc-sidebar" aria-label="Shopping cart and order review">
+          <div className="proc-cart"><div className="proc-cart-heading"><ShoppingBasket size={20} /><h3>Cart</h3><span>{session?.cart.items.length || 0}</span></div>
+            {!session ? <div className="proc-cart-empty"><Package size={32} strokeWidth={1.1} /><p>No products yet.</p></div> : <>
+              <div className="proc-cart-source"><span className={session.mode === "live" ? "live" : ""} />{session.mode === "live" ? "Live quotation" : "Demo prices"}</div>{session.commercial_context && <details className="proc-commercial-details"><summary>Quotation account</summary><p>{session.commercial_context}</p></details>}
+              <div className="proc-cart-items">{session.cart.items.length ? session.cart.items.map((item, i) => <div className="proc-cart-item" key={`${item.id}-${i}`}><div><strong>{item.name}</strong><span>{amount(item.quantity_sales_units)} {item.sales_unit || "packs"}</span>{item.quantity_breakdown?.length ? item.quantity_breakdown.map((quantity, j) => <div className="proc-cart-quantity-breakdown" key={j}><span>{amount(quantity.requested_quantity)} {quantity.unit} requested → {amount(quantity.effective_quantity)} {quantity.unit} ordered</span>{Number(quantity.surplus_quantity) > 0 && <em>{amount(quantity.surplus_quantity)} {quantity.unit} extra from whole packs</em>}{quantity.includes_converted_requirements && <small>Includes shared product requirements converted before rounding.</small>}</div>) : item.effective_quantity != null && <span>{amount(item.effective_quantity)} {item.unit || ""} ordered</span>}</div><b>{money(item.line_total)}</b>{canEdit && item.line_ids?.length === 1 && (() => { const line = session.lines.find((candidate) => candidate.id === item.line_ids![0]); return line ? <form className="proc-cart-quantity" key={`cart-quantity-${line.id}-${line.quantity}`} onSubmit={(e) => { e.preventDefault(); const values = new FormData(e.currentTarget); action("set_quantity", { line_id: line.id, quantity: values.get("quantity"), unit: line.unit }); }}><label className="sr-only" htmlFor={`cart-quantity-${line.id}`}>Required quantity for {item.name}</label><input id={`cart-quantity-${line.id}`} name="quantity" type="number" required min="0.001" step="0.001" defaultValue={line.quantity} disabled={isWorking} /><span>{line.unit}</span><button type="submit" disabled={isWorking}>Update</button><button type="button" aria-label={`Remove ${line.requested_label} request from cart`} disabled={isWorking} onClick={() => action("remove_line", { line_id: line.id })}><Trash2 size={14} /></button></form> : null; })()}</div>) : <p className="proc-cart-no-items">Choose suitable products to build your cart.</p>}</div>
+              <form className="proc-cart-requirements" onSubmit={updateConstraints}><label>Requested delivery<input type="date" name="delivery_date" aria-label="Cart delivery date" required value={deliveryDate} onInput={(e) => setDeliveryDate(e.currentTarget.value)} onChange={(e) => setDeliveryDate(e.target.value)} disabled={isWorking || !canEdit} /></label><label>Maximum budget (€)<input type="number" name="budget" aria-label="Cart maximum budget" min="0" step="0.01" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="No budget set" disabled={isWorking || !canEdit} /></label>{canEdit && <button type="submit" disabled={isWorking}>Apply requirements<ArrowRight size={13} /></button>}</form>
+              <div className="proc-totals">{unresolvedCount > 0 && <p className="proc-cart-partial">Partial cart · {unresolvedCount} {unresolvedCount === 1 ? "request still needs" : "requests still need"} attention.</p>}<div><span>{session.cart.total == null ? "Item subtotal" : "Cart total"}</span><strong>{money(displayedTotal)}</strong></div>{session.constraints.budget != null && <div><span>Budget</span><b>{money(session.constraints.budget)}</b></div>}{session.cart.budget_remaining != null && <div className={negativeBudget ? "over-budget" : "under-budget"}><span>{negativeBudget ? "Budget balance (over)" : "Budget remaining"}</span><b>{money(session.cart.budget_remaining)}</b></div>}{hasUnknownCharges && <p className="proc-candidate-warning">Delivery and service charges excluded.</p>}<small>Tax included. Availability is not a reservation.</small></div>
               {receipt ? <div className="proc-success" role="status"><span><CheckCheck size={24} /></span><h4>Simulated order recorded.</h4><p>{receipt.order_id || receipt.id}</p><strong>{money(receipt.total ?? displayedTotal)}</strong><small>This is a prototype receipt. No real supplier order, invoice or payment was created.</small><button onClick={verifyReceipt} disabled={isWorking}>{busy === "verify" ? "Checking receipt…" : verification ? "Verify receipt again" : "Verify receipt"}<RefreshCw size={13} /></button>{verification && <p className="proc-receipt-verified"><ShieldCheck size={14} />The saved receipt matches this recorded order. This verifies our simulator record.</p>}<button onClick={startNew}>Start another request<ArrowRight size={13} /></button></div> : <div className="proc-checkout">
                 {approvalNeeded && !approved && <div className="proc-approval"><ShieldCheck size={18} /><div><strong>Purchasing approval needed</strong><p>This exact cart exceeds the buyer's authority. A separate approver must review it.{session.approval?.threshold != null && ` Autonomous limit: ${money(session.approval.threshold)}.`}</p>{role === "approver" ? <button onClick={approve} disabled={isWorking || !session.offer || offerExpired}>{busy === "approve" ? "Approving…" : "Approve this exact cart"}<Check size={14} /></button> : <button onClick={onSignIn}>Sign in as approver<ArrowUpRight size={13} /></button>}</div></div>}
                 {approved && <p className="proc-approved"><ShieldCheck size={15} />This exact cart has manager approval.</p>}
@@ -494,7 +519,8 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
               </div>}
             </>}
           </div>
-          <div className="proc-trust"><ShieldCheck size={19} /><div><strong>You stay in control.</strong><p>Only a complete, validated item basket can be confirmed. Important changes require a fresh quote and any necessary approval.</p><p>All orders in this prototype are simulated.</p></div></div>
+
+          {view === "products" && session && <button className="proc-review-cart" onClick={() => onNavigate?.("order")}>Review cart<ArrowRight size={15} /></button>}
           {!role && <button className="proc-access" onClick={onSignIn}>Open your buyer workspace<ArrowUpRight size={16} /></button>}
         </aside>
       </div>

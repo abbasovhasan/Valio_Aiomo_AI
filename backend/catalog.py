@@ -128,16 +128,6 @@ def product(pid):
 
 
 def search(query, limit=10):
-    terms = query.casefold().split()
-    matches = []
-    for p in load_catalog().values():
-        if p.get("deleted"):
-            continue
-        names = " ".join(
-            n.get("value", "") for n in p.get("synkkaData", {}).get("names", [])
-        ).casefold()
-        if all(t in names or t == str(p["id"]) for t in terms):
-            matches.append(normalize(p))
-            if len(matches) >= limit:
-                break
-    return matches
+    # One catalog index for the original outside-agent route and Product Workspace.
+    from .product_facts import search_page
+    return [normalize(load_catalog()[p["id"]]) | p for p in search_page(query, limit=limit)["products"]]

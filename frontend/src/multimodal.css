@@ -20,3 +20,17 @@
 .input-review p, .input-review li { font-size: 11px; line-height: 1.6; color: #4c6045; }
 .input-use-text { display: inline-flex; align-items: center; gap: 7px; background: #244a36; color: #fffdf4; border: 0; border-radius: 5px; padding: 10px 13px; cursor: pointer; font-size: 12px; }
 @media (max-width: 600px) { .input-tool-buttons button { min-height: 44px; flex: 1 1 auto; justify-content: center; } .input-review { padding: 12px; } .input-use-text { width: 100%; min-height: 44px; justify-content: center; } }
+.input-tools { margin:0; padding:0 20px 14px; }
+.input-tool-buttons button { background:transparent; border-color:transparent; padding:7px 9px; font-size:12px; }
+.input-tool-buttons button:hover:not(:disabled) { background:#eef2e8; }
+.input-privacy { margin:6px 0 0; }
+.input-privacy > summary { font-size:11px; color:#52664a; }
+.input-review { background:#fafbf7; border-radius:4px; }
+.input-camera { margin:14px 0; border:1px solid #c9d3c2; padding:12px; border-radius:4px; background:#f8faf5; }
+.input-camera > div:first-child { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:13px; }
+.input-camera video { display:block; width:100%; max-height:350px; object-fit:contain; background:#1b251d; border-radius:3px; margin:12px 0; }
+.input-camera-actions { display:flex; align-items:center; gap:10px; }
+.input-camera-actions button { padding:10px 13px; border:1px solid #b7c7ac; border-radius:3px; color:#284b2c; background:#fff; font-size:12px; }
+.input-camera-actions button:first-child { background:#214d37; color:#fff; border-color:#214d37; }
+.input-camera > p { font-size:12px; line-height:1.8; color:#52664a; }
+@media(max-width:600px) { .input-tools { padding:0 12px 12px; } .input-tool-buttons { gap:3px; } .input-tool-buttons button { flex:1 1 43%; font-size:12px; } }

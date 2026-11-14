@@ -2,15 +2,88 @@ A4TB - Valio Aimo - WEBSITE CHECK GUIDE
 Prepared 14 November 2026, Europe/Helsinki
 
 Website: https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site
+Guide on this PC:
+/home/hasan/Documents/ChatGPT/Valio_Aiomo_AI/docs/WEBSITE_CHECK_GUIDE.txt
 
 This guide explains what to click, what to try and what a good result looks
 like. You do not need to know programming. Keep a note of anything confusing,
 missing or incorrect as you go.
 
-Current verification record (14 November 2026):
+Current release checks, 14 November 2026:
 
-  - The extended core is deployed at the website above. Its observed frontend
-    asset is index-C67pl32K.js; this is a build identifier, not a Git commit.
+  - The final local backend regression suite passed 285 tests in 83.21 seconds,
+    including all 13 actual catalog names longer than 120 characters through
+    a follow-up edit. The production build passed: index-B4p90PsT.js.
+  - The final public B4p90PsT asset and health endpoint were verified. Camera
+    and microphone permissions allow this website itself. Twelve continuity
+    checks passed in 69.561 seconds: accounts, preferences, simulated spending,
+    five QA receipts and older shared receipts survived, with a new protected
+    backup. This continuity run created no orders.
+  - Three final hosted checks passed for the longest actual catalog name
+    (155 characters): two sales packages followed by a EUR 150 budget change
+    retained the same saved request, SKU, full name, quantity and date. Spending
+    stayed unchanged; these checks made no orders, model or supplier calls.
+  - Tracked microphone controls passed 7 isolated async checks; camera controls
+    passed 7 grouped checks. Image normalization passed 8 checks. They use fake
+    hardware to test permission races, cancellation, cleanup and editable review.
+    They do not prove real camera
+    capture, microphone accuracy or a complete browser journey.
+  - Local browser checks exercised six source categories, mixed-case mozzarella
+    search, pagination and returning to preserved Products search context.
+    The 8 kg mozzarella / 12 kg cheddar request and cheaper-item follow-up
+    preserved the other product. Date 17 November survived a budget edit.
+  - Local browser checks exercised uploaded-image extraction into editable text,
+    combined typed input, and pending camera/microphone Cancel controls. Build
+    cart stayed unavailable during pending media work and recovered on Cancel.
+    The final Add/Discard review guard is also covered by the isolated checks.
+  - On the hosted AADxbAJX functional release, desktop 1440x1000 and mobile
+    390x844 had no horizontal overflow. Products appeared as readable mobile
+    cards; navigation, all four inputs, 69 mixed-case mozzarella results,
+    the second page and search-context recovery were observed. No browser
+    console errors or warnings were logged. The public CFFEDfEi image release
+    has also passed 12 continuity checks and 4 automatic-image API checks that
+    confirmed the actual configured vision provider.
+  - After fixing duplicate control keys, the BkM4NY18 build passed four local
+    and two public repeated product-choice changes with exactly two product
+    search forms for two requests. Reload retained the ready EUR 67.20 cart;
+    browser console errors were absent. Clean desktop 1440x1000 and mobile
+    390x844 views had no horizontal overflow and showed all four input methods.
+    The final B4p90PsT change only raises the per-product search limit to 200
+    characters; the tested media and layout are unchanged.
+  - A local provider-outage check kept an initial draft unpriced and blocked
+    confirmation. Refreshing the same saved cart after recovery produced a
+    real EUR 1.15 quotation and a ready state; no fixture fallback was used.
+  - A local 40-diner meal check with 8 vegetarian, 4 gluten-free and 2 needing
+    both produced groups 30/2/6/2, then handed off 11 ingredient requests with
+    date 17 November and budget EUR 500. Chef review and missing hard evidence
+    still blocked confirmation as required.
+  - The latest local browser image check read a 4200x3300 JPEG (13.86 million
+    pixels, 338,326 bytes) into correct editable shopping-list text through the
+    automatic image reader. No provider selector or consent checkbox appeared.
+    A 5,242,881-byte original was rejected with the 5 MB message and no stuck
+    loading state. This proves the uploaded-image flow, not a phone camera.
+  - The CFFEDfEi public browser check read that same high-resolution image into
+    editable text. Changing butter from 5 to 4 kg kept Build cart unavailable
+    until Add to request; adding preserved typed context, delivery date
+    17 November and budget EUR 200.
+  - The user has confirmed a correct real microphone transcript on the public
+    website, including their accent. That report used the previous hosted
+    microphone label; it is prior hardware evidence, not proof of every new
+    release, accent or environment.
+  - After reloading the public CFFEDfEi image release, the owner confirmed: "Yes, the
+    photo works and text is editable." The same photo below 5 MB no longer
+    produced the 12-megapixel error, and no reader selector or checkbox was
+    required. This is a successful physical phone/photo retest, not a general
+    camera, handwriting or image-reading accuracy measurement.
+
+Final public-release, mobile and device checks are recorded in
+FINAL_QA_REPORT.md beside this guide. Do not treat these local checks as proof
+that every step below passed on the latest public deployment.
+
+Prior deployed verification record (before the latest catalog/history/camera update):
+
+  - The earlier extended core was deployed at the website above. Its observed
+    asset was index-C67pl32K.js; this is a historical build, not a Git commit.
   - 171 backend tests passed, and the production frontend build passed.
   - 47 checks through the hosted application passed, including private
     accounts, cookie lifetimes, preferences/isolation, cart changes, separate
@@ -45,6 +118,11 @@ Current verification record (14 November 2026):
     without horizontal overflow. The native filter control was tested by
     keyboard.
 
+The historical 171-test / 47-hosted-check record above is separate from the
+latest 285-test local regression result. Counts overlap and must not be added.
+The Products, History and four input-method steps below remain review
+instructions, not a claim that the updated public release passed every step.
+
 The steps below remain a checklist for your own review, not a promise that
 every device, accent, image, sort combination or possible purchasing request
 was tested. A blocked meal caused by missing evidence is not a completed
@@ -59,8 +137,9 @@ not place a Valio Aimo order, reserve stock, issue an invoice or take payment.
 Open the website above. On a phone, open the navigation menu if needed.
 Choose "Smart order".
 
-Click "Open your desk" in the upper-right corner. The sign-in window is called
-"Your place at the desk." Enter the private buyer code in "ACCESS CODE", then
+Click the upper-right profile button, labelled "Account and sign-in" for
+assistive technology. Before sign-in it shows "Open your desk". The window is called
+"Sign in". Enter the private buyer code in "ACCESS CODE", then
 click "Open this session". The profile should now identify the buyer role.
 
 Where to find the codes privately:
@@ -113,10 +192,14 @@ For a predictable first check, enter:
   I need 20 litres of lactose-free milk and 10 kg of cheese delivered by
   Monday. Choose the cheapest suitable products.
 
-Click the "Rehearsal fixture" control below the request box to inspect the
-settings. Keep the source as "Rehearsal fixture  -  authored prices & stock".
-Leave "Use NVIDIA for nonconfidential demo requests" unchecked for this repeatable,
-local-parser check. Click "Build my cart".
+Set "Delivery date" before ordering and optionally enter "Maximum budget (€)".
+Enter the date first, then the budget: the date must stay visible and both
+values must reach the resulting cart. Later changes can be applied from the
+early controls using "Apply", or in the cart using "Apply requirements".
+Click "Build cart". Ordinary customer ordering does not require choosing an AI
+provider or debugging source. Actual quotations may change; inspect their source.
+If the owner enabled optional "Demo settings", an authored fixture can be used
+for a repeatable check. Fixture prices must remain labelled as demonstration data.
 
 Look for these results:
 
@@ -126,8 +209,10 @@ Look for these results:
   - Each card shows the sales package, order quantity, quantity after rounding,
     sales-unit price and line total.
   - A selected card has a "Selected" mark and an explanation of the selection.
+    A selected request with a constraint problem must still say "Needs review"
+    and retain the actual warning; selection alone does not mean it is valid.
   - The right-hand shopping cart contains the selected products.
-  - The quotation is explicitly labelled as a rehearsal fixture.
+  - The quotation source is labelled accurately; demo prices are not live prices.
 
 The system may ask you to "Choose" a suitable product. Click a valid candidate
 rather than guessing its name in a message. A blocked candidate must explain
@@ -144,6 +229,58 @@ three groups. An inconsistent or missing package conversion should produce a
 visible issue, not an invented quantity or a silently accepted huge package.
 
 
+2A. SEARCH THE PRODUCTS WORKSPACE
+
+Open "Products". Set a delivery date and optional budget before adding items.
+Search for "cheese" in "Search products". Check the result count and use
+"Next"/"Previous" to inspect additional pages; a matching category must not
+collapse into an arbitrary single recommendation.
+
+Try a partial product name, different capitalization, a real SKU, a category
+and "Filters" for brand/origin/verified dietary claims. Reset the filters and
+try an absent name: it should show "No matching products", without inventing any.
+
+Active filters stay visible as removable chips even when "Filters" is closed;
+its heading shows the filter count. Use the visible "Reset filters" before
+trying a different product category. Saved dietary and ingredient exclusions
+appear under "Mandatory food requirements applied" and remain active after
+this reset. Manage them deliberately in "Buying preferences".
+
+Move to "Smart order" and back to "Products". The search, filter, selected
+product and page should remain where you left them.
+
+Also try a real catalog product with a long full name. Select it and make a
+follow-up change; the name must not be cut off or rejected. The per-request
+"Product search" field accepts up to 200 characters.
+
+Click "Select" on a product. Inspect its package and "Product details".
+Set "Quantity" and "Unit": sales packages, kg required, litres required or
+pieces required. Check the rounded sales-package count and total, then click
+"Add to cart". Change quantity, replace the product or remove it from the cart.
+Other selected products should stay intact. A missing price should say
+"Requires quote"; it is not zero. Eligible products can remain in a draft,
+while confirmation requires verified prices, availability and hard restrictions.
+
+Under "Buying preferences" -> "Mandatory food requirements", try "No pork"
+and a peanut exclusion separately. Save, search again and inspect alternatives.
+Known violations and unknown compliance must never appear verified safe.
+Mandatory restrictions remain enforced when optional preferences are off.
+Clear test restrictions deliberately before starting an unrelated example.
+
+
+2B. REOPEN, REUSE AND ORGANIZE HISTORY
+
+Create a request, then open "History". Click its title to reopen it and check
+the saved quantities and choices. "Reuse" should create a separate draft;
+review its date, budget and fresh quotation before considering confirmation.
+
+Click "Archive", enable "Show archived requests", and use "Restore". Reload
+to check persistence. Use the remove icon and confirm "Remove from history"
+on a disposable example. It should leave your personal list, while recorded
+orders and required audit evidence remain retained. Another buyer workspace
+must not gain access to these entries.
+
+
 3. CHECK QUANTITIES AND PACKAGE ROUNDING
 
 Under a requested product, inspect "Required quantity". Change the number and
@@ -153,7 +290,7 @@ You can also make a conversational change. In the request box enter:
 
   Reduce the cheese to 5 kg.
 
-Click "Update my cart". The cheese quantity should change while the milk
+Click "Update cart". The cheese quantity should change while the milk
 quantity, lactose-free rule and unrelated selections remain intact.
 
 For the breakfast example, try:
@@ -240,12 +377,15 @@ availability. You can also set "Preferred brand", "Preferred origin" and
 "Prefer verified organic products". Click "Save preferences".
 
 Reload and check that the saved values return in the same buyer workspace.
-Start "New request". "Use saved preferences for this new request" controls
+Start "New request". "Use saved optional preferences for this new request" controls
 whether those soft defaults are applied. Explicit request instructions and
 hard dietary, origin, brand and budget requirements take priority.
 
-Saving a preference must not rewrite a cart already under review. Check that
-the current quantities, selections and quote do not silently change.
+Saving optional brand/origin/organic/priority defaults must not rewrite a cart
+already under review. Saving mandatory food requirements does recheck the
+current unconfirmed cart and can block products that no longer meet them.
+Use "Other excluded ingredients" for up to eight specific exclusions. There
+is no general note editor promising unsupported automatic preferences.
 "Clear saved preferences" resets the saved defaults; it does not delete orders.
 
 To check isolation, sign into a different private workspace. It must not load
@@ -307,7 +447,7 @@ The comparison should explain what changed.
 
 In "Smart order", click "New request" and choose "Bolognese for 500 diners".
 Its request includes 20% vegetarian diners, 10% gluten-free diners and an
-overlap of 20 diners who need both. Click "Build my cart".
+overlap of 20 diners who need both. Click "Build cart".
 
 Expected result:
 
@@ -365,7 +505,7 @@ but a search result is still a proposal for chef review. Missing dietary
 claims or inconsistent package facts may leave an ingredient unresolved.
 Changing the purchasing priority does not create a verified quality score.
 
-In "Turn this recipe into a quoted basket":
+In "Quote shopping plan":
 
   - Set "Requested delivery".
   - Optionally set "Maximum budget (EUR )".
@@ -476,15 +616,20 @@ after sign-in if necessary. The reference should be unchanged. A receipt is
 not an invoice, a supplier confirmation or a guarantee of delivery.
 
 
-11. DISTINGUISH THE REHEARSAL FROM LIVE SERVICES
+11. OPTIONAL OPERATOR CHECKS: TEXT INTERPRETER AND PRICE SOURCE
 
-Start a new request. Open the source settings using "Rehearsal fixture".
-Select "Live Valio sponsor sandbox" to obtain actual challenge sandbox price
-and availability reads. This is still a synthetic challenge environment;
-confirmation remains our simulation.
+These are optional technical checks, separate from ordinary ordering. Open
+"Demo tools" -> "Data & model settings", start a new request, then open
+"Demo settings". "Quotation source" offers "Live sponsor sandbox" or
+"Authored fixture prices & stock". Live mode reads challenge sandbox price
+and availability; confirmation remains our simulation. Existing saved carts
+keep their original source.
 
-The checkbox "Use NVIDIA for nonconfidential demo requests" is independent of the
-price/stock source. The default is the local parser, with NVIDIA unchecked.
+The text-interpreter checkbox "Use NVIDIA for nonconfidential demo requests"
+is independent of the price/stock source. Typed-request interpretation defaults
+to the local parser, with this operator checkbox unchecked.
+This operator setting is for interpreting text requests. Uploaded images and
+camera photos use the automatic image reader described in section 13B instead.
 You can deliberately choose any of these combinations:
 
   Rehearsal fixture + NVIDIA off: local parser, authored prices and stock.
@@ -493,9 +638,10 @@ You can deliberately choose any of these combinations:
   Live sandbox + NVIDIA on: hosted interpretation and live sandbox lookups.
 
 Checking NVIDIA can make a hosted model request even with fixture prices.
-Some supported recipe turns use the local deterministic recipe planner; the
-displayed interpretation source tells you which path actually ran. Do not
+Some supported recipe turns use the local deterministic recipe planner. Do not
 assume that every result used NVIDIA simply because the checkbox was selected.
+Model-routing verification belongs in the technical evidence report; the
+ordinary response banner omits internal routing labels.
 
 Look for clear source labels. The fixture must never be presented as live.
 If a live service times out or returns an error, the application should show
@@ -551,64 +697,104 @@ With a keyboard:
   - Use Enter or Space to activate the appropriate control.
   - Complete sign-in and a small order review without relying on a mouse.
   - Check that errors are readable and that controls have meaningful labels.
+  - Open "Filters" and "Product details" with the keyboard; remove an active
+    filter and use "Reset filters" without depending on color or a mouse.
+  - Check the mobile profile button is announced as "Account and sign-in".
 
 
-13A. SPEAK OR UPLOAD A VOICE REQUEST
+13A. TYPE OR RECORD A VOICE REQUEST
 
-In Smart order, click "Speak your order". Allow microphone access only when
+In Smart order, "Type a message" focuses the request field. For speech,
+click "Voice input". While permission is pending, look for
+"Allow microphone access in your browser..." and "Cancel". Repeated activation
+must not start multiple recordings. Cancel must release the ordering controls;
+a late permission response must not silently begin recording.
+
+Allow microphone access only when
 you intend to record. Say a short demonstration request such as:
 
   I need twenty litres of lactose-free milk and five kilograms of butter
   delivered by Monday.
 
 Click "Stop & transcribe". The recording automatically stops after 30 seconds.
-"Cancel recording" discards the current recording. After stopping normally,
+"Cancel" discards the current recording. After stopping normally,
 the clip is sent to this application's server for local Whisper transcription.
 It is not sent to an external speech provider by the default implementation.
 
-Inspect "Check the details before adding" and "Editable extracted text".
+Inspect "Review extracted text" and "Editable extracted text".
 Correct product names, numbers, units and dietary wording. Read any uncertainty
-messages. Click "Add this text to my request" only after review. It adds editable
+messages. Click "Add to request" only after review. It adds editable
 text to the request; it must not build or confirm a cart automatically.
 
-You can combine it with typed text, then click "Build my cart" or
-"Update my cart" yourself. "Upload audio" accepts an existing short audio
-clip instead of microphone recording. Files are limited to 5 MB and decoded
-audio to 30 seconds. A declined microphone permission must give a useful
-message and leave typing/audio upload available.
+During recording, extraction and unreviewed extracted text, "Build cart" or
+"Update cart" stays unavailable. While reviewing text, "Voice input", "Upload
+image" and "Take a photo" also stay unavailable so they cannot replace it.
+Typing and editing stay available. Use "Add to request", or the close button
+labelled "Discard extracted text", to finish that review and release ordering.
+
+You can combine it with typed text, then click "Build cart" or "Update cart"
+yourself. There is no audio-file upload control. The microphone still uses
+the retained audio-processing API. A declined microphone permission must give
+a useful message and leave typing, image upload and photo capture available.
 
 
 13B. READ A PHOTO OR PRINTED SHOPPING LIST
 
-Click "Image reading & privacy". The default "Image reader" is
-"On this server - no external image service". This uses local Tesseract OCR
-for English/Finnish printed text. It runs on the application server, not
-inside your browser. Click "Add photo or list" and choose one clear JPEG or
-PNG of a nonconfidential demonstration shopping list. Keep it under 5 MB;
-the server also bounds image dimensions.
+Click "Upload image" and choose one clear JPEG or PNG of a nonconfidential
+example shopping list. The image reader is selected automatically; there is
+no provider selector or per-image checkbox. "Input privacy" explains that an
+external service may process images. Use only nonconfidential demonstration
+content; do not upload credentials, customer names, contracts or private
+Valio Aimo material.
+
+The original file must be nonempty and no larger than 5 MB. Large-resolution
+phone images within that byte limit are resized proportionally in the browser
+to at most 1600 pixels on the longest side, with camera orientation respected.
+A fresh image removes the original filename and metadata before upload. The
+server keeps its independent image-validation defenses for direct requests.
 
 Check the editable extracted text against the image. Fix uncertain characters,
-quantities and units before "Add this text to my request". A product photo
+quantities and units before "Add to request". A product photo
 without an explicit purchasing quantity must not cause an invented quantity.
 A blank, corrupt or unsupported file should explain the problem, not create
 an order.
 
-Optional cloud image check:
+Try keeping a short typed request in the composer before uploading the image.
+While "Reading your shopping list..." is shown, its text must remain intact
+and Build/Update must be unavailable. The same guard remains while extracted
+text awaits Add or Discard; choosing Add combines it with the existing request.
 
-  - Deliberately choose the NVIDIA vision option under "Image reader".
-  - Before choosing/uploading an image, confirm the checkbox stating that it
-    contains only nonconfidential demonstration content and may be sent to
-    NVIDIA's trial vision service.
-  - Without that consent, the cloud upload must be unavailable/rejected.
-  - Use only an authored demonstration list. Do not upload customer names,
-    credentials, contracts or confidential Valio Aimo material to that option.
+Image reading uses the configured automatic vision service; a temporary
+provider failure may use the local OCR fallback. No customer model decision
+is required. Uploaded media is processed for text extraction, not saved as a
+workspace attachment. Text you choose to add becomes part of the purchasing
+request only when you submit it. Review names, quantities and units yourself;
+image reading does not establish prices, inventory or dietary safety.
 
-The local default does not send images to an external image service. The
-optional cloud reader receives a sanitized image after metadata removal.
-Uploaded files are processed for extraction rather than saved as workspace
-attachments. The text you choose to add becomes part of the purchasing request
-when you later submit it. These readers extract proposed text; inventory and
-financial facts are still checked independently by the purchasing engine.
+
+13C. TAKE A PHOTO
+
+Click "Take a photo". On a supported phone, use the native camera. On desktop,
+allow camera access, inspect the preview and click "Capture photo". While
+waiting for permission, the app says "Allow camera access in your browser to
+continue." "Cancel" and the close button must release the pending state.
+With keyboard focus inside the camera preview, Escape should close it too.
+Closing, leaving the screen or unmounting must stop any camera stream, including
+a late permission grant. A late photo callback after Cancel must not upload it.
+
+Read and correct the same "Editable extracted text" used for uploaded images,
+then explicitly "Add to request". Capture must not build or confirm a cart.
+Declining permission or having no camera must give useful recovery through
+"Upload image" or typing. Photos use the same automatic image reader and
+proportional resizing as uploaded images. The 5 MB original-file limit still
+applies; a phone photo must not be rejected merely because its original pixel
+count exceeds the server's direct-request limit.
+
+The owner confirmed the physical phone/photo flow on the final public release:
+the same photo below 5 MB worked and its text was editable. The seven grouped
+automated camera checks separately use fake streams and canvas callbacks.
+Neither a single owner retest nor those unit checks establishes support or
+accuracy for every phone, webcam, browser, permission dialog or handwriting.
 
 
 
@@ -623,6 +809,10 @@ financial facts are still checked independently by the purchasing engine.
 [ ] Product evidence exposed supplied ingredient, storage and source details.
 [ ] A follow-up preserved unrelated products and hard requirements.
 [ ] I could compare, replace, search for and remove products.
+[ ] Products showed result counts, filters and working pagination.
+[ ] Active filters stayed visible; saved mandatory restrictions survived reset.
+[ ] Products search/page/selection context survived navigation away and back.
+[ ] History open/reuse/archive/restore/removal persisted appropriately.
 [ ] Sorting/filtering use actual fields, retain selection and offer counts/reset.
 [ ] Saved soft preferences persist and affect only new requests as chosen.
 [ ] A low budget blocked confirmation and could be corrected explicitly.
@@ -638,11 +828,19 @@ financial facts are still checked independently by the purchasing engine.
 [ ] Receipt verification did not create another order.
 [ ] Reload preserved the saved cart and receipt.
 [ ] Live and fixture evidence were labelled accurately.
-[ ] The NVIDIA choice was clearly separate from the price/stock source.
+[ ] Optional Demo text-interpreter settings stayed separate from image reading.
 [ ] A live service failure was shown honestly.
-[ ] Voice and image text remained editable before adding/building.
+[ ] Type a message, Voice input, Upload image and Take a photo were usable.
+[ ] The audio-file upload option was absent and live microphone input remained.
+[ ] Voice, uploaded-image and camera text stayed editable before adding/building.
+[ ] Build/Update stayed blocked during media work and pending Add/Discard review.
+[ ] Pending microphone/camera Cancel prevented late or duplicate capture.
 [ ] Microphone denial and corrupt/large uploads had useful recovery.
-[ ] Optional cloud vision required explicit nonconfidential-demo consent.
+[ ] Camera denial/unavailability and preview cancellation had useful recovery.
+[ ] Images were read automatically without a provider selector or checkbox.
+[ ] Input privacy explained external processing and nonconfidential demo use.
+[ ] High-resolution JPEG/PNG under 5 MB resized and remained editable.
+[ ] Originals over 5 MB were rejected without leaving a stuck loading state.
 [ ] Phone layout and keyboard controls were usable.
 
 For each problem, record the request you entered, the source mode, the button
@@ -668,8 +866,8 @@ submission are not integrated. Historical delivered-quantity reliability is
 not an on-time-delivery guarantee. Public product listing is not proof of
 current orderable stock.
 
-Live service availability and prices may change. Fixture prices with the local parser
-are the repeatable way to assess the interaction and deterministic validation.
+Live service availability and prices may change. Fixture prices with the local
+typed-request parser provide a repeatable check of deterministic validation.
 The public-site microphone worked correctly in one user-reported accent test.
 Wider voice accuracy, noisy kitchens and real camera/handwriting coverage still
 need representative checks; a clean synthetic benchmark does not establish it. The
@@ -677,7 +875,7 @@ workspace's simulated spending allowance and policy expiry can affect later test
 
 No final Junction project submission is performed by these website checks.
 
-Final persistence check: 13 additional checks passed after a server redeployment.
+Historical persistence check: 13 checks passed after the earlier redeployment.
 The same remembered session, account login, preferences, simulated spending and
 three saved receipts/approval records recovered. A private backup passed SQLite
 integrity; this check created no new orders.

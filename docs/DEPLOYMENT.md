@@ -8,19 +8,19 @@ Technical origin: `https://hasan-abbasov--aimo-order-desk-web.us-east.modal.run`
 
 - One CPU, 1,536 MiB, zero minimum warm containers, maximum one container/input, 120-second idle scale-down and 180-second request timeout.
 - Four original SHA-256-verified restricted datasets in a private catalog volume; none in Git or public assets.
-- Separate private SQLite volume stores users, preferences, hashed sessions/revocations, authentication throttles, carts, approvals, receipts and synthetic spend. Volume commits complete before acknowledging mutations.
+- Separate private SQLite volume stores users, preferences, hashed sessions/revocations, authentication throttles, carts, personal history metadata, approvals, receipts and synthetic spend. Volume commits complete before acknowledging mutations. History removal hides a personal entry; it does not erase purchasing evidence.
 - Runtime keys/codes use a named Modal Secret. The Aiven password is not uploaded. Local PostgreSQL remains available with CA/hostname verification; its allowlist was not widened.
 - Tesseract English/Finnish runs in the image. Public pretrained Whisper base weights are bundled at build time, not downloaded during hosted requests. `scripts/prepare_multimodal.py` records pinned model provenance/license; private challenge data is not used to train a model.
-- Speech/OCR are server-local by default. Optional NVIDIA text and vision requests require visible opt-in for nonconfidential demo content; image use needs separate consent. No uploaded image/audio persistence.
-- The Sites proxy preserves secure cookies and microphone access on the same HTTPS origin, blocks cross-origin mutations and does not cache API responses. No credentials/catalog live in its source.
+- Speech remains server-local Whisper; optional text interpretation is unchanged. Ordinary images now attempt NVIDIA automatically with actual local OCR fallback on provider failure, under a plain nonconfidential-demo privacy notice. Explicit API `provider=local` stays offline; `cloud_consent=false` is rejected before an external read. Original JPEG/PNG files up to 5 MiB are resized to at most 1,600 pixels in the browser; server 12 MP/decompression guards remain. Uploaded media is not persisted.
+- The Sites proxy preserves secure cookies on the same HTTPS origin, blocks cross-origin mutations and does not cache API responses. Current application policy allows same-origin camera and microphone access; image capture uses the existing sanitized OCR endpoint. No credentials/catalog live in proxy source.
 
 This is deliberately a single-writer deployment. Stop the previous writer before deploying. Do not increase replicas/inputs against the same SQLite file. Horizontal scaling requires a transactional shared database and distributed controls. A protected backup was saved before this release; no ledger reset was performed. [Modal ASGI hosting](https://modal.com/docs/guide/webhooks), [volume consistency](https://modal.com/docs/guide/volumes).
 
-Measured local app/catalog/media resident memory was about 882 MiB before the additional approximately 47.6 MiB static search index. The 1,536 MiB setting accommodates that measured workload. Warm three-item fixture quotations improved about 7.1×; first index construction costs extra cold-start time. Network/provider latency and sequential queueing remain visible, and these observations are not a load SLA.
+The previous release's local app/catalog/media sample observed about 882 MiB resident memory before an additional approximately 47.6 MiB static search index; that sample motivated the 1,536 MiB setting. Its warm three-item fixture quote improved about 7.1×, while cold index construction took longer. Current complete-catalog QA passed 12 matrix groups in 39.882 seconds, with exact category/brand prefiltering and page-only normalization where criteria permit. These separate local observations do not establish hosted latency or a load SLA.
 
 ## Financial controls
 
-Account verification established a $100 Junction grant expiring 30 November 2027, a Modal-set $101 hard workspace cap, and no payment method; increasing the cap required adding one. No payment method, subscription or top-up was added. The November CLI billing CSV observed **$0.04369075** total at this release check. Usage reports can lag and include existing workspace activity; this is neither a final bill nor a remaining-balance claim. Read the dashboard and verify coverage before later provisioning. [Modal budget behavior](https://modal.com/docs/guide/budgets).
+Account verification established a $100 Junction grant expiring 30 November 2027, a Modal-set $101 hard workspace cap, and no payment method; increasing the cap required adding one. No payment method, subscription or top-up was added. The latest November preparation CSV observation was **$0.06505835**, after the earlier **$0.04369075** observation. Reports can lag/include other workspace activity; neither is a final bill or remaining balance. Read the dashboard and verify coverage before later provisioning. [Modal budget behavior](https://modal.com/docs/guide/budgets).
 
 ## Reproduce
 
@@ -38,7 +38,17 @@ The preparation script verifies and uploads only the four authorized catalog fil
 
 ## Current release evidence
 
-171 backend tests and the production frontend build passed. The current Modal deployment built the Python 3.12 OCR/ASR image successfully; HTTPS health, SQLite/simulated-only mode, current asset `index-C67pl32K.js`, typed OpenAPI and the old manager-approved receipt were verified.
+Final `index-B4p90PsT.js` is publicly deployed with healthy SQLite/simulator/camera/microphone policy. Source passed **285 backend tests in 83.21s**; **12 fresh continuity checks passed in 69.561s**, preserving protected backup, remembered accounts/preferences/spending, all five QA receipts and old shared receipt, with zero new orders. Prior Bk 12@90.887s and CFF 12@153.84s remain historical records.
+
+Bk fixed sibling React keys: four consecutive local choices/reload and repeated public choices kept exactly two query forms, with empty console warnings/errors. Desktop 1440×1000/mobile 390×844 had no overflow and four inputs visible. Final B4 only expands the product-name/input cap to 200; all 13 long source names passed locally, and 3 hosted checks on the longest 155-character name preserved full intent/selection/state without orders or provider calls. CFF media/owner evidence remains valid for unchanged paths.
+
+The hosted catalog matrix passed **12/12 groups in 378.345 seconds** (349-category/698-request sweep: 310.544 seconds), plus **13 history/release checks**, four fixture drafts and one reuse. Preferences and zero QA-buyer spending were preserved, with no model/supplier calls or orders in that matrix. Earlier AAD passed 47 broader checks in 117.09 seconds, including NVIDIA text/Valio and explicit local OCR/ASR.
+
+The unchanged CFF automatic image endpoint passed **4 checks in 12.592s**, actually using NVIDIA Super VL (1,856ms reported server time), respecting explicit cloud denial and leaving purchasing state unchanged. Public high-resolution review and the owner phone-photo retest passed; handler checks were 7 microphone/7 camera/8 normalization. These bounded cases are not general accuracy/hardware proof. Only final private source commit/push remains pending.
+
+## Previous C67 hosted evidence
+
+That release passed 171 backend tests and the production build. Its Modal deployment built the Python 3.12 OCR/ASR image successfully; HTTPS health, SQLite/simulated-only mode, asset `index-C67pl32K.js`, typed OpenAPI and the old manager-approved receipt were verified.
 
 The **47-check extended hosted verifier passed** accounts/cookie policies, isolation, saved preferences, multi-item and repeated follow-ups, budgets/dates/version failures, private exact manager approval, simulated confirmation/idempotency/verification/recovery, real OCR/Whisper and actual Lightning/Valio reads. Default shared spend remained unchanged. A subsequent 13-check stopped-writer restart verified the same 30-day cookie, password login, preferences, synthetic spend and three receipts/approval records after redeployment, with a protected integrity-checked backup and no new orders. Uploaded clip recognition took 1,800 ms backend time and OCR 444 ms in this run; HTTP/network/queue time is additional. Live NVIDIA/Valio quotation was read-only.
 

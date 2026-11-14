@@ -85,7 +85,7 @@ TimestampText = Annotated[str, AfterValidator(_timestamp)]
 FingerprintText = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 Unit = Literal["L", "kg", "pieces", "packages"]
 Origin = Literal["finland", "eu"]
-Diet = Literal["lactose_free", "gluten_free", "vegetarian", "vegan"]
+from .preferences import DietaryRestriction as Diet
 LineStatus = Literal[
     "EXACT_MATCH", "AMBIGUOUS_MATCH", "CONSTRAINT_CONFLICT", "OUT_OF_STOCK", "NOT_FOUND"
 ]
@@ -179,6 +179,9 @@ class CandidateResponse(ResponseModel):
     ] | None = None
     match_reason: str | None = None
     requires_explicit_choice: bool | None = None
+    eligibility_issues: list[str] | None = None
+    quote_issues: list[str] | None = None
+    selectable: bool | None = None
     price_per_requested_unit: NonnegativeText | None = Field(
         default=None, description="EUR sales-pack price divided by verified capacity in the requested unit."
     )
@@ -197,6 +200,8 @@ class RequestedLineResponse(ResponseModel):
     quantity: PositiveText
     unit: Unit
     dietary: list[Diet]
+    requested_dietary: list[Diet] | None = None
+    requested_excluded_ingredients: list[str] | None = None
     origin: Origin | None
     max_unit_price: NonnegativeText | None
     required_brand: str | None = None
@@ -205,6 +210,7 @@ class RequestedLineResponse(ResponseModel):
     require_organic: bool | None = None
     preferred_organic: bool | None = None
     retrieval_queries: list[str] | None = None
+    excluded_ingredients: list[str] | None = None
     selected_product_id: str | None
     selection_reason: str | None = None
     candidates: list[CandidateResponse]

@@ -1,6 +1,6 @@
 # A4TB · Valio Aimo
 
-**Good judgment. On the record.** Describe a kitchen's purchasing needs, compare catalog products and review a complete simulated basket. Deterministic checks enforce quantities, dietary evidence, budget and delivery; permitted spend exceptions require exact separate approval.
+Describe a kitchen's purchasing needs, compare catalog products and review a complete simulated basket. Deterministic checks enforce quantities, dietary evidence, budget and delivery; permitted spend exceptions require exact separate approval.
 
 Built for Junction 2026's Valio Aimo Trusted Trade Agents challenge. **All orders are simulated. No final Junction submission was performed; the last observed entry was Draft. Source remains private.**
 
@@ -8,7 +8,9 @@ Built for Junction 2026's Valio Aimo Trusted Trade Agents challenge. **All order
 
 Open **[A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site)** and use the private buyer/approver codes from this installation's ignored `.local/access.json`. This public Sites frontdoor proxies the application on Modal; the source repository, runtime secrets and restricted catalog remain private. Never put codes in URLs or public messages. All orders remain simulated.
 
-**Smart order** is the primary workflow: type, speak or upload a shopping list, edit the extracted text, compare catalog candidates and package surplus, sort/filter alternatives, save preferences, change quantities/budget/date, resolve choices, and confirm a complete priced basket. Unresolved constraints block checkout. **Meal planner** supports editable recipes and transfers a saved plan with its selections into the same quotation/cart workflow. **Trust scenarios** retains the original milk approval/repair demo in the shared workspace.
+**Smart order** is the primary workflow: type, speak, upload an image or take a photo, edit the extracted text, compare products and package surplus, and review a priced basket. Set delivery and budget before ordering. **Products** searches the complete catalog with pagination, filters and direct cart selection. **History** opens, reuses, archives or removes personal entries while preserving receipts and audit records. Saved hard restrictions affect search, alternatives, meal planning and cart validation. **Meal planner** transfers a reviewed plan into the same cart; **Demo tools** retains the shared milk trust scenarios and technical controls.
+
+Final `index-B4p90PsT.js` is deployed with **285 passing backend tests**, **12 fresh continuity checks** and a passing hosted long-name regression. Repeated product choices/reload preserve one search form per line; all saved identities, preferences, spending and receipts survived. Bk layout and CFF media/owner evidence remain valid for unchanged controls. Only the private source commit/push remains pending. See [current status](PROJECT_STATUS.md) and the [final QA report](docs/FINAL_QA_REPORT.md).
 
 See [implementation and acceptance plan](docs/IMPLEMENTATION_PLAN.md) and [hosting details](docs/DEPLOYMENT.md).
 
@@ -22,17 +24,18 @@ Prerequisites: Node.js 20.19+ or 22.12+, npm, Python 3.12+, and [uv](https://doc
 
 Open **http://127.0.0.1:8000**. Open your desk with the **buyer** code from ignored `.local/access.json`, or use that invitation under **Create workspace** for a separate username/password account. To approve an exception, sign in separately using the **approver** code; a private workspace's approval shortcut fills its scope. Codes are never bundled into frontend assets. Sessions last eight hours, or 30 days with **Remember me**; hashed tokens, expiry and revocation persist across server restarts. Registration creates an isolated simulator workspace, not a supplier customer contract.
 
-`start.sh` installs the pinned Python dependencies, prepares public OCR/speech assets when absent, builds React and serves FastAPI. First setup requires network access. For a prepared offline fallback, use `AIMO_STORAGE=sqlite ./start.sh`, select **Rehearsal fixture** prices/stock and leave NVIDIA unchecked. This needs the supplied static catalog but makes no NVIDIA or Valio API requests. NVIDIA interpretation is an independent option; fixture prices alone do not disable that request. The optional NVIDIA trial is for nonconfidential demo content only.
+`start.sh` installs pinned dependencies, prepares public OCR/speech assets when absent, builds React and serves FastAPI. First setup requires network access. For prepared offline ordering, use `AIMO_STORAGE=sqlite ./start.sh`, open **Demo tools → Data & model settings**, choose fixture quotations, leave NVIDIA text interpretation unchecked and use text or local voice. Ordinary image input automatically attempts NVIDIA before local fallback; explicit `provider=local` remains available to API/rehearsal callers. Fixture prices alone do not disable image processing or an independently selected text model. NVIDIA trial inputs must be nonconfidential demonstration content.
 
 The prepared `.env`, `.local/aiven-ca.pem` and `data/raw/` are preserved and ignored. A fresh clone requires the challenge-restricted catalog obtained legitimately through the resource portal. Do not commit or redistribute it. `.env.example` documents optional integration names; never paste credentials into browser URLs or frontend code.
 
 ## Try the customer workflow
 
-1. Use **Smart order** and request “20 litres of lactose-free milk and 5 kilograms of butter by Monday. Budget €200.” Choose fixture or live sandbox pricing explicitly.
-2. Inspect product evidence, package surplus and alternatives. **Sort & filter products** changes discovery; **Choose** changes the basket. **Buying preferences** saves soft defaults for future carts.
-3. Try **Speak your order**, **Add photo or list**, or **Upload audio**. Review and edit the transcript before adding it. Local Tesseract and Whisper are the defaults; media never directly changes a cart.
-4. Lower the budget to €1 and observe the block, then use an offered correction. Review the complete cart and confirm a **simulated** order. Verify and reload the saved receipt.
-5. Use **Meal planner** for the 500-diner bolognese example. Dietary overlap must be explicit, the proposed recipe needs chef review, and missing catalog claims remain blockers.
+1. Set an optional maximum budget and a delivery date, then request “20 litres of lactose-free milk and 5 kilograms of butter.” Ordinary ordering uses live sandbox quotations; fixture/model controls are under **Demo tools**.
+2. Inspect package surplus, alternatives and **Product evidence**. Search **Products** for cheese, browse further results, select an ordering unit/quantity and add a product to the cart.
+3. Try **Type a message**, **Voice input**, **Upload image** or **Take a photo**. Normal JPEG/PNG photos up to 5 MiB are resized to at most 1,600 pixels before reading. Images automatically try NVIDIA, with local OCR fallback on provider failure; voice stays local Whisper. Correct text before adding it. No provider selector/checkbox or audio-file upload remains in the customer flow; media never directly changes a cart.
+4. Save a mandatory dietary restriction or ingredient exclusion in **Buying preferences**. Current drafts are revalidated. Removing a saved-only restriction requires a fresh quote; an explicit request restriction remains in force. Missing evidence does not establish compliance.
+5. Lower the budget to €1 and observe the block, then correct it. Review and confirm a **simulated** order; verify and reload its receipt. Use **History** to open/reuse/archive/remove requests. Reuse requires a fresh quote and any recipe review/approval.
+6. Use **Meal planner** for the 500-diner bolognese example. Dietary overlap must be explicit, the recipe needs chef review, and missing catalog claims remain blockers.
 
 The step-by-step [plain-text checking guide](docs/WEBSITE_CHECK_GUIDE.txt) includes accounts, Remember Me, media, manager approval and expected failures.
 
@@ -74,7 +77,7 @@ flowchart LR
 
 Authority belongs to the server. The original milk scenario has a chef-approved assortment and mandatory lactose-free evidence. Smart order uses a separate customer-confirmed basket policy with item-level dietary/origin constraints. Both enforce buyer/customer/approver scope, dimensional pack conversion, whole-pack lot steps, EUR tax-inclusive Decimal amounts, date/cutoff/sales-block/quantity/freshness checks, five-minute quote expiry and a shared €6,000 synthetic cumulative cap. Atomic transactions and uniqueness constraints enforce spending and idempotency. Approvals bind the exact buyer, products, quantities, date, subtotal, evidence and expiry. Changed facts require a new quote and approval.
 
-The hosted Modal application deliberately uses persistent SQLite in a private volume and one writer. Accounts, preferences, sessions, carts, approvals, receipts and synthetic spend survive restarts. The local Aiven PostgreSQL option uses full hostname/CA verification and at most two concurrent connections; an unavailable local connection is explicitly reported as SQLite fallback. The Aiven allowlist was not widened for hosting. Catalog search runs in the backend. Optional NVIDIA receives the request and necessary prior structured intent, or a short candidate list for the external-agent shortlist; never the full catalog or credentials. Image transmission to NVIDIA needs separate explicit consent. Actual deployed NVIDIA interpretation and Valio reads were tested successfully; failures remain visible.
+The hosted Modal application uses persistent SQLite in a private volume and one writer. Accounts, preferences, sessions, history, carts, approvals, receipts and spend survive restarts. Local Aiven uses full CA/hostname verification and at most two connections; its allowlist was not widened. Catalog search stays on the server. Optional NVIDIA text receives necessary intent/a shortlist, never the full catalog or credentials. Automatic image reading sends sanitized images under a nonconfidential-demo notice and respects explicit API denial. Actual deployed text interpretation, Valio reads and default NVIDIA vision passed; extraction leaves purchasing state unchanged.
 
 ## Verify
 
@@ -104,8 +107,8 @@ This operator command is never exposed over HTTP and never runs automatically du
 ## Live, controlled and simulated
 
 - **Live sponsor sandbox:** actual authenticated Valio price/availability reads. These are synthetic challenge commercial facts, not production offers or reservations.
-- **NVIDIA agent:** optional hosted Nemotron 3.5 Lightning 30B-A3B typed interpretation, or a function-call shortlist in Trust scenarios. The selected text model passed 7/7 authored cases and 18/18 checks in the final small benchmark; this is not a general accuracy claim. Optional Super VL image reading requires separate consent. Invalid output/provider failures remain visible; deterministic policy still applies.
-- **Speech and OCR:** server-local pretrained Whisper base and Tesseract; editable output, bounded uploads, no stored recordings/images, and no automatic cart mutation. Actual public-site microphone transcription was confirmed by the owner.
+- **NVIDIA agent:** optional Nemotron 3.5 Lightning text interpretation or a typed Trust shortlist; selected text passed 7/7 authored cases and 18/18 checks, not a general accuracy claim. Automatic Super VL image reading falls back to local OCR on provider failure. API provenance remains honest; deterministic purchasing policy still applies.
+- **Speech and images:** local Whisper base; automatic sanitized image reading with Tesseract fallback/explicit offline API option. Output stays editable, uploads are bounded and not stored, and extraction never changes a cart automatically. The owner previously confirmed actual public-site microphone transcription. Pathological/corrupt images may still be rejected; server pixel/decompression defenses remain.
 - **Rehearsal fixture:** authored dynamic prices/availability, visibly labelled; real supplied catalog metadata is still used. No silent network fallback.
 - **Controlled failures:** named overlays on fixture or live evidence. Their injected fields are recorded explicitly.
 - **Order/approval gateway:** our implementation. No published sponsor order endpoint is used. No payments, real purchases or supplier orders occur.

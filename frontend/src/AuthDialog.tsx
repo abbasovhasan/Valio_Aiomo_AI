@@ -50,9 +50,8 @@ export function AuthDialog({ api, session, onClose, onSignedIn, onLogout }: Prop
   return <dialog ref={dialog} className="auth-modal auth-dialog" aria-labelledby="auth-title" onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}>
     <button className="modal-close icon-button" type="button" onClick={onClose} disabled={busy} aria-label="Close sign-in"><X size={20} /></button>
     <span className="modal-icon"><KeyRound size={25} /></span>
-    <div className="eyebrow">YOUR WORKSPACE. YOUR DECISIONS.</div>
-    <h2 id="auth-title">Your place at the desk.</h2>
-    <p>Use the shared demonstration, or create a private workspace for your own saved preferences, carts and simulated orders.</p>
+    <h2 id="auth-title">Sign in</h2>
+    <p>Use the shared demonstration or a private workspace with saved preferences, carts and simulated orders.</p>
     {session.role && <div className="current-session"><div><strong>{session.name}</strong><small>{session.workspace_name || session.role}</small>{session.demo_workspace === false && <button className="text-button" type="button" onClick={() => { setMethod("code"); setWorkspaceId(session.workspace_id || ""); }}>Approve this workspace</button>}</div><button className="text-button" type="button" disabled={busy} onClick={async () => { try { await onLogout(); onClose(); } catch { setError("Sign-out could not be completed. Check the connection and try again."); } }}><LogOut size={15} />Sign out</button></div>}
     <nav className="auth-methods" aria-label="Sign-in method">
       {([['code','Demo access'],['login','Account sign-in'],['register','Create workspace']] as const).map(([value,label]) => <button type="button" key={value} aria-pressed={method === value} disabled={busy} onClick={() => { setMethod(value); setError(""); setPassword(""); setCode(""); }}>{label}</button>)}

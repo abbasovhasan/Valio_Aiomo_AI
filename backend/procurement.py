@@ -24,7 +24,7 @@ from .procurement_contract import ProcurementSessionResponse, ReceiptVerificatio
 
 D = Decimal
 PREFIX = "/api/v1/procurement/sessions"
-ITEM_OPTIONS = {"required_brand": None, "preferred_brand": None, "preferred_origin": None, "require_organic": False, "preferred_organic": False, "retrieval_queries": []}
+ITEM_OPTIONS = {"required_brand": None, "preferred_brand": None, "preferred_origin": None, "require_organic": False, "preferred_organic": False, "retrieval_queries": [], "excluded_ingredients": []}
 
 
 class Strict(BaseModel):
@@ -44,12 +44,12 @@ class Action(Strict):
     version: int = Field(ge=1)
     action: Literal[
         "message", "select_product", "set_quantity", "remove_line", "set_budget",
-        "set_date", "set_query", "quote", "acknowledge_recipe",
+        "set_date", "set_query", "quote", "acknowledge_recipe", "add_product",
     ]
     message: str | None = Field(default=None, min_length=1, max_length=3000)
     line_id: str | None = Field(default=None, max_length=80)
     product_id: str | None = Field(default=None, max_length=80)
-    query: str | None = Field(default=None, min_length=1, max_length=120)
+    query: str | None = Field(default=None, min_length=1, max_length=500)
     quantity: Decimal | None = Field(default=None, gt=0, le=1000000, decimal_places=3)
     unit: Literal["L", "kg", "pieces", "packages"] | None = None
     budget: Decimal | None = Field(default=None, ge=0, le=1000000, decimal_places=2)
@@ -60,6 +60,16 @@ class FromMealPlan(Strict):
     plan_id: str = Field(min_length=1, max_length=80)
     selections: dict[int, str] = Field(default_factory=dict, max_length=24)
     mode: Literal["fixture", "live"] = "fixture"
+    apply_preferences: bool = True
+    date: Date | None = None
+    budget: Decimal | None = Field(default=None, ge=0, le=1000000, decimal_places=2)
+
+
+class FromProduct(Strict):
+    product_id: str = Field(min_length=1, max_length=80)
+    quantity: Decimal = Field(default=Decimal(1), gt=0, le=1000000, decimal_places=3)
+    unit: Literal["L", "kg", "pieces", "packages"] = "packages"
+    mode: Literal["fixture", "live"] = "live"
     apply_preferences: bool = True
     date: Date | None = None
     budget: Decimal | None = Field(default=None, ge=0, le=1000000, decimal_places=2)
@@ -237,9 +247,9 @@ def commercial(product, units, evidence, day):
     }
 
 
-def requirements(session):
+def requirements(session, *, requested_only=False):
     return {
-        "items": [{"id": line["id"], "query": line["requested_label"], "quantity": line["quantity"], "unit": line["unit"], "dietary": line["dietary"], "origin": line.get("origin"), "max_unit_price": line.get("max_unit_price"), **{key: line.get(key, default) for key, default in ITEM_OPTIONS.items()}} for line in session["lines"]],
+        "items": [{"id": line["id"], "query": line["requested_label"], "quantity": line["quantity"], "unit": line["unit"], "dietary": line.get("requested_dietary", line["dietary"]) if requested_only else line["dietary"], "origin": line.get("origin"), "max_unit_price": line.get("max_unit_price"), **{key: line.get("requested_excluded_ingredients", line.get(key, default)) if requested_only and key == "excluded_ingredients" else line.get(key, default) for key, default in ITEM_OPTIONS.items()}} for line in session["lines"]],
         "budget": session["constraints"]["budget"],
         "delivery_date": session["constraints"]["delivery_date"],
         "preference": session["constraints"]["preferences"],
@@ -255,7 +265,7 @@ def interpret_into(session, message):
     previous_recipe = session.get("recipe_request")
     previous_recipe_notes = session.get("recipe_notes", [])
     previous_review_required = session.get("recipe_review_required", False)
-    result = interpret(message, prior=requirements(session) if session["lines"] or session.get("messages") else None, use_model=session["use_model"])
+    result = interpret(message, prior=requirements(session, requested_only=True) if session["lines"] or session.get("messages") else None, use_model=session["use_model"])
     if len(result.get("items", [])) > 24:
         result.setdefault("ambiguous_fields", []).append("This request exceeds the 24-line cart limit. Split it into smaller explicit requests.")
     previous = session["lines"]
@@ -273,7 +283,7 @@ def interpret_into(session, message):
             "id": old["id"] if old else policy.uid("line"),
             "requested_label": str(item["query"])[:200],
             "quantity": str(quantity), "unit": item["unit"],
-            "dietary": item.get("dietary", []), "origin": item.get("origin"),
+            "dietary": item.get("dietary", []), "requested_dietary": copy.deepcopy(item.get("dietary", [])), "requested_excluded_ingredients": copy.deepcopy(item.get("excluded_ingredients", [])), "origin": item.get("origin"),
             "max_unit_price": item.get("max_unit_price"),
             "selected_product_id": old.get("selected_product_id") if old else None,
             **{key: copy.deepcopy(item.get(key, old.get(key, default) if old else default)) for key, default in ITEM_OPTIONS.items()},
@@ -321,7 +331,7 @@ def interpret_into(session, message):
 
 
 def suitability(product, line):
-    return product_facts.suitability(product, line["dietary"], line.get("origin"), line.get("required_brand"), line.get("require_organic", False))
+    return product_facts.suitability(product, line["dietary"], line.get("origin"), line.get("required_brand"), line.get("require_organic", False), line.get("excluded_ingredients", []))
 
 
 def soft_matches(product, line):
@@ -393,12 +403,19 @@ def quote(session, spent):
         product_map[line["id"]] = products
         ids.extend(p["id"] for p in products)
     ids = list(dict.fromkeys(ids))
-    evidence = lookup(session, ids) if ids and valid_day else None
+    evidence = None
+    session["quotation_error"] = None
+    if ids and valid_day:
+        try:
+            evidence = lookup(session, ids)
+        except upstream.UpstreamError as exc:
+            session["quotation_error"] = str(exc)
     for line in session["lines"]:
         line["candidates"] = []
         for p in product_map[line["id"]]:
             units, pack = item_facts(p, line["quantity"], line["unit"])
             issues = suitability(p, line)
+            eligibility_issues = list(issues)
             issue_codes = []
             if line["dietary"] and product_facts.suitability(dict(p, deleted=False), line["dietary"]):
                 issue_codes.append("DIETARY_EVIDENCE_CONFLICT")
@@ -419,7 +436,7 @@ def quote(session, spent):
             if p.get("deposits"):
                 issues.append("Deposit charges need a supported charge calculation.")
                 issue_codes.append("DEPOSIT_CHARGES_UNKNOWN")
-            commercial_facts = commercial(p, units, evidence, day) if evidence else {"issues": ["Set a valid delivery date to obtain a quotation."], "unit_price": None, "line_total": None, "availability": "not_queried", "delivery_date": None}
+            commercial_facts = commercial(p, units, evidence, day) if evidence else {"issues": [session.get("quotation_error") or "Set a valid delivery date to obtain a quotation."], "unit_price": None, "line_total": None, "availability": "not_queried", "delivery_date": None}
             issues.extend(commercial_facts["issues"])
             issue_codes.extend(commercial_facts.get("issue_codes", ["QUOTATION_NOT_REQUESTED"] if evidence is None else []))
             limit = decimal(line.get("max_unit_price"))
@@ -438,7 +455,8 @@ def quote(session, spent):
                 "availability": commercial_facts["availability"], "delivery_date": commercial_facts["delivery_date"],
                 "attributes": {"brand": p.get("brand"), "claims": p.get("claims", []), "origin_codes": p.get("origin_codes", []), "organic": p.get("organic")},
                 "match_method": p.get("match_method", "lexical"), "match_reason": p.get("match_reason", "Catalog name match."),
-                "requires_explicit_choice": p.get("match_method") in ["semantic_expansion", "supplier_substitution"] and p["id"] != line.get("selected_product_id"),
+                "requires_explicit_choice": (p.get("purpose_review_required", False) or p.get("match_method") in ["semantic_expansion", "supplier_substitution"]) and p["id"] != line.get("selected_product_id"),
+                "eligibility_issues": eligibility_issues, "quote_issues": [issue for issue in issues if issue not in eligibility_issues], "selectable": not eligibility_issues,
                 "preference_matches": soft_matches(p, line),
                 "price_per_requested_unit": format(price / pack, "f") if price is not None and pack is not None and pack > 0 else None,
                 "comparison_delta": None, "comparison_note": None,
@@ -576,6 +594,23 @@ def quote(session, spent):
 
 
 def register_routes(app, db, buyer, approver, identity, limit):
+    def quote_for(session, scope):
+        from .preferences import enforce_hard
+        enforce_hard(session, db, scope)
+        quote(session, db.spent(scope["buyer_id"]))
+
+    def selected_line(product_id, quantity, unit):
+        try:
+            product = product_facts.normalize(product_id)
+        except (ValueError, KeyError):
+            fail("product_missing", "Choose a product in the current catalog.", 404)
+        if product.get("deleted"):
+            fail("product_deleted", "This product is no longer offered.", 422)
+        return {"id": policy.uid("line"), "requested_label": product["name"],
+            "quantity": format(D(quantity), "f"), "unit": unit, "dietary": [], "origin": None,
+            "max_unit_price": None, **copy.deepcopy(ITEM_OPTIONS),
+            "selected_product_id": product["id"], "selection_reason": "Selected directly from the catalog."}
+
     def load(id, scope):
         result = db.get("procurement", id, scope["buyer_id"])
         if not result or result["customer_id"] != scope["customer_id"]:
@@ -592,6 +627,14 @@ def register_routes(app, db, buyer, approver, identity, limit):
     def public(session):
         # Commercial raw data remain server-side and in immutable basket evidence.
         result = copy.deepcopy(session)
+        current_day = result.get("constraints", {}).get("delivery_date")
+        current_notes = []
+        for note in result.get("interpretation_notes", []):
+            previous_deadline = re.match(r"Interpreted the delivery deadline as (\d{4}-\d{2}-\d{2})", note)
+            if previous_deadline and previous_deadline[1] != current_day:
+                continue
+            current_notes.append(note)
+        result["interpretation_notes"] = current_notes
         for line in result["lines"]:
             for candidate in line.get("candidates", []):
                 candidate["product_details"] = {key: candidate.get("product", {}).get(key) for key in ["id", "name", "brand", "manufacturer", "vendor", "category", "ingredients", "allergens", "storage", "temperature_condition", "source", "updated_at", "sales_unit", "base_unit", "base_units_per_sales_unit", "allowed_lot_size", "kg_per_sales_unit", "liters_per_sales_unit", "pieces_per_sales_unit", "conversion_evidence", "conversion_issues", "reliability", "carbon_group_estimate", "organic", "organic_evidence"]}
@@ -605,6 +648,37 @@ def register_routes(app, db, buyer, approver, identity, limit):
                 result["assistant_message"] = "This quotation expired. Refresh prices and availability before confirming."
         result.pop("pending_key", None)
         return result
+
+    app.state.public_procurement_session = public
+
+    def reuse_session(old, scope, options):
+        session = base_session(scope, options.get("mode") or old["mode"], old.get("use_model", False))
+        session["lines"] = copy.deepcopy(old["lines"])
+        for line in session["lines"]:
+            line["id"] = policy.uid("line")
+            line.pop("candidates", None)
+        session["constraints"] = copy.deepcopy(old["constraints"])
+        session["constraints"]["delivery_date"] = options.get("date")
+        if options.get("budget") is not None:
+            session["constraints"]["budget"] = options["budget"]
+        for key in ["messages", "interpretation_notes", "recipe_notes", "recipe_request", "source_meal_plan", "source_recipe"]:
+            if key in old:
+                session[key] = copy.deepcopy(old[key])
+        session["recipe_review_required"] = bool(session.get("recipe_notes"))
+        session["interpretation_notes"] = [note for note in session.get("interpretation_notes", []) if not note.startswith("Interpreted the delivery deadline as ")]
+        session["ambiguities"] = copy.deepcopy(old.get("ambiguities", []))
+        if options.get("date"):
+            session["ambiguities"] = [value for value in session["ambiguities"] if not re.search(r"delivery date|delivery deadline", value, re.I)]
+        session["reused_from"] = old["id"]
+        session["interpretation_source"] = "Reused purchasing request"
+        from .preferences import enforce_hard
+        enforce_hard(session, db, scope)
+        quote_for(session, scope)
+        db.save("procurement", session["id"], scope["buyer_id"], session)
+        db.audit(policy.uid("audit"), scope["buyer_id"], "procurement_reused", {"session_id": session["id"], "source_id": old["id"]})
+        return public(session)
+
+    app.state.reuse_procurement_session = reuse_session
 
     @app.post(PREFIX, response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def create(data: CreateSession, scope=Depends(buyer)):
@@ -620,9 +694,28 @@ def register_routes(app, db, buyer, approver, identity, limit):
             session["constraints"]["delivery_date"] = data.date.isoformat()
         if data.budget is not None:
             session["constraints"]["budget"] = str(data.budget)
-        quote(session, db.spent(scope["buyer_id"]))
+        quote_for(session, scope)
         db.save("procurement", session["id"], scope["buyer_id"], session)
         db.audit(policy.uid("audit"), scope["buyer_id"], "procurement_created", {"session_id": session["id"], "version": 1})
+        return public(session)
+
+    @app.post(PREFIX + "/from-product", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
+    def from_product(data: FromProduct, scope=Depends(buyer)):
+        limit("procurement-" + scope["buyer_id"], 30)
+        session = base_session(scope, data.mode)
+        session["lines"] = [selected_line(data.product_id, data.quantity, data.unit)]
+        session["constraints"].update(delivery_date=data.date.isoformat() if data.date else None, budget=str(data.budget) if data.budget is not None else None)
+        session["messages"] = [{"role": "user", "text": f"{data.quantity} {data.unit} of {session['lines'][0]['requested_label']}"}]
+        session["ambiguities"] = []
+        session["interpretation_source"] = "Catalog selection"
+        from .preferences import apply_saved
+        apply_saved(session, db, scope, hard_only=not data.apply_preferences)
+        issues = suitability(product_facts.normalize(data.product_id), session["lines"][0])
+        if issues:
+            fail("product_ineligible", " ".join(issues), 422)
+        quote_for(session, scope)
+        db.save("procurement", session["id"], scope["buyer_id"], session)
+        db.audit(policy.uid("audit"), scope["buyer_id"], "procurement_created", {"session_id": session["id"], "source": "catalog"})
         return public(session)
 
     @app.post(PREFIX + "/from-meal-plan", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
@@ -676,7 +769,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
         if data.apply_preferences:
             from .preferences import apply_saved
             apply_saved(session, db, scope, apply_priority=False)
-        quote(session, db.spent(scope["buyer_id"]))
+        quote_for(session, scope)
         db.save("procurement", session["id"], scope["buyer_id"], session)
         db.audit(policy.uid("audit"), scope["buyer_id"], "meal_plan_quoted", {"plan_id": plan["id"], "session_id": session["id"], "selections": data.selections, "recipe_review_required": True})
         return public(session)
@@ -714,11 +807,31 @@ def register_routes(app, db, buyer, approver, identity, limit):
                 fail("message_required", "Enter a purchasing change.", 422)
             interpret_into(session, data.message)
         elif data.action == "select_product":
-            if not any(c["id"] == data.product_id for c in line.get("candidates", [])):
-                fail("invalid_selection", "Select one of this line's actual catalog candidates.", 422)
-            line["selected_product_id"] = data.product_id
+            try:
+                product = product_facts.normalize(data.product_id)
+            except (ValueError, KeyError):
+                fail("invalid_selection", "Choose an actual catalog product.", 422)
+            from .preferences import enforce_hard
+            enforce_hard(session, db, scope)
+            issues = suitability(product, line)
+            if issues:
+                fail("product_ineligible", " ".join(issues), 422)
+            line["selected_product_id"] = product["id"]
             line["selection_reason"] = "Selected explicitly by the customer."
             session["last_selected_line_id"] = line["id"]
+        elif data.action == "add_product":
+            if not data.product_id:
+                fail("product_required", "Choose a catalog product.", 422)
+            if len(session["lines"]) >= 24:
+                fail("line_limit", "The current cart has 24 requests. Start another cart.", 422)
+            added = selected_line(data.product_id, data.quantity or D(1), data.unit or "packages")
+            session["lines"].append(added)
+            from .preferences import apply_saved
+            apply_saved(session, db, scope, apply_priority=False)
+            issues = suitability(product_facts.normalize(data.product_id), added)
+            if issues:
+                fail("product_ineligible", " ".join(issues), 422)
+            session["messages"].append({"role": "user", "text": f"Add {added['quantity']} {added['unit']} of {added['requested_label']}"})
         elif data.action == "set_quantity":
             if data.quantity is None:
                 fail("quantity_required", "Enter a positive quantity.", 422)
@@ -743,7 +856,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
         elif data.action == "acknowledge_recipe":
             session["recipe_review_required"] = False
             session["recipe_acknowledged_at"] = policy.now().isoformat()
-        quote(session, db.spent(scope["buyer_id"]))
+        quote_for(session, scope)
         compare_save(old, session)
         db.audit(policy.uid("audit"), scope["buyer_id"], "procurement_updated", {"session_id": id, "version": session["version"], "action": data.action, "change": data.model_dump(mode="json", exclude_none=True), "offer_fingerprint": (session.get("offer") or {}).get("fingerprint")})
         return public(session)
@@ -786,6 +899,11 @@ def register_routes(app, db, buyer, approver, identity, limit):
             fail("confirmation_blocked", "Resolve constraints and obtain any required approval for an unexpired basket.")
         if old.get("checkout_pending") and old.get("pending_key") != key:
             fail("checkout_pending", "Retry confirmation with its original idempotency key.")
+        from .preferences import enforce_hard
+        constrained = copy.deepcopy(old)
+        enforce_hard(constrained, db, scope)
+        if requirements(constrained)["items"] != requirements(old)["items"]:
+            fail("preferences_changed", "Dietary restrictions changed. Refresh and review the cart before confirming.")
         # Revalidate exact SKU quantities and commercial facts before atomically
         # consuming shared synthetic spend. No new product choice happens here.
         evidence = lookup(old, [line["id"] for line in offer["lines"]])

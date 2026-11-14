@@ -10,7 +10,7 @@ Public entry point: **[A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4
 - [Acceptance record](ACCEPTANCE_RECORD.md): requirement-to-evidence mapping and final source/handoff record.
 - [Deployment](DEPLOYMENT.md): runtime, persistence, financial controls and release procedure.
 
-Source repository: private `abbasovhasan/Valio_Aiomo_AI`, branch `codex/aimo-order-desk`. Earlier `ff0384c`/`947e417` releases remain historical. Final B4 deployment/continuity/long-name and Bk layout proof passed; unchanged CFF media/owner proof retains its named scope. Only the new private commit/push remains pending.
+Source repository: private `abbasovhasan/Valio_Aiomo_AI`, branch `codex/aimo-order-desk`. Earlier `ff0384c`/`947e417` releases remain historical. Final B4 deployment/continuity/long-name and Bk layout proof passed; unchanged CFF media/owner proof retains its named scope. Implementation `829207f` was reviewed, scanned and pushed to private `codex/aimo-order-desk`.
 
 ## Implemented application
 
@@ -24,7 +24,7 @@ The current continuation adds paginated Products, direct catalog add/replace and
 
 | Scope | Observed evidence | Boundary |
 | --- | --- | --- |
-| Current backend/frontend | **285 backend tests in 83.21s**, final `index-B4p90PsT.js` deployed with healthy SQLite/simulator/policy | Only private commit/push pending |
+| Current backend/frontend | **285 backend tests in 83.21s**, final `index-B4p90PsT.js` deployed with healthy SQLite/simulator/policy | Private implementation `829207f` pushed after review and scanning |
 | Final long-name regression | All 13 actual source names >120 characters passed local selection/follow-up;3 hosted checks on the longest 155-character product retained line/SKU/name/qty/date/budget/version | No orders/model/supplier calls, spend unchanged; personal QA entry hidden while audit retained |
 | Final B4 continuity | **12 checks passed in 69.561s:** protected backup, remembered identities/preferences/spending, all five QA and old shared receipt retained | Zero new orders; prior Bk 12@90.887s/CFF 12@153.84s remain historical |
 | Bk browser/render, unchanged in B4 | Four local choices/reload and repeated public choices kept 2 forms for 2 lines; final 20 L milk/4 kg butter draft ready at 17 November / €200, no order | Empty console warnings/errors; desktop 1440×1000/mobile 390×844 no overflow, four inputs visible |

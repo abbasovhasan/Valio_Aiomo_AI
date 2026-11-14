@@ -44,7 +44,7 @@ Bk fixed sibling React keys: four consecutive local choices/reload and repeated 
 
 The hosted catalog matrix passed **12/12 groups in 378.345 seconds** (349-category/698-request sweep: 310.544 seconds), plus **13 history/release checks**, four fixture drafts and one reuse. Preferences and zero QA-buyer spending were preserved, with no model/supplier calls or orders in that matrix. Earlier AAD passed 47 broader checks in 117.09 seconds, including NVIDIA text/Valio and explicit local OCR/ASR.
 
-The unchanged CFF automatic image endpoint passed **4 checks in 12.592s**, actually using NVIDIA Super VL (1,856ms reported server time), respecting explicit cloud denial and leaving purchasing state unchanged. Public high-resolution review and the owner phone-photo retest passed; handler checks were 7 microphone/7 camera/8 normalization. These bounded cases are not general accuracy/hardware proof. Only final private source commit/push remains pending.
+The unchanged CFF automatic image endpoint passed **4 checks in 12.592s**, actually using NVIDIA Super VL (1,856ms reported server time), respecting explicit cloud denial and leaving purchasing state unchanged. Public high-resolution review and the owner phone-photo retest passed; handler checks were 7 microphone/7 camera/8 normalization. These bounded cases are not general accuracy/hardware proof. Implementation `829207f` was reviewed, scanned and pushed to private `codex/aimo-order-desk`.
 
 ## Previous C67 hosted evidence
 

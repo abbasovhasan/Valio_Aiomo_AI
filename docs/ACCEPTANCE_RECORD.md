@@ -1,6 +1,6 @@
 # A4TB · Valio Aimo — acceptance and release evidence
 
-Reviewed 14 November 2026, Europe/Helsinki. Final `index-B4p90PsT.js` is deployed with **285 backend tests (83.21s)**, **12 fresh continuity checks (69.561s)** and **3 hosted long-name checks** passed. Bk repeated-choice/layout and unchanged CFF media/owner proof retain their named scopes. Only private commit/push remains pending; orders stay simulated, source/data private and Junction submission untouched.
+Reviewed 14 November 2026, Europe/Helsinki. Final `index-B4p90PsT.js` is deployed with **285 backend tests (83.21s)**, **12 fresh continuity checks (69.561s)** and **3 hosted long-name checks** passed. Bk repeated-choice/layout and unchanged CFF media/owner proof retain their named scopes. Private implementation `829207f` was reviewed, scanned and pushed; orders stay simulated, source/data private and Junction submission untouched.
 
 ## Evidence levels
 
@@ -19,8 +19,8 @@ Reviewed 14 November 2026, Europe/Helsinki. Final `index-B4p90PsT.js` is deploye
 | R2 — deployment/persistence | **Passed:** B4 asset/health/policy;12 fresh continuity checks in 69.561s preserved protected backup, remembered identities/preferences/spending and all QA/shared receipts | Zero new orders; previous Bk/CFF continuity remains historical |
 | R3 — hosted API/providers | Catalog 12/12 groups (378.345s), all 349 categories/698 requests (310.544s), 13 history/release checks and 4 actual default-image checks (12.592s) passed; earlier AAD 47 includes NVIDIA text/Valio/local media | No live supplier commit; provider timings/accuracy are bounded samples |
 | R4 — customer browser | **Passed:** Bk repeated choices/reload kept 2 forms; final dated/budgeted two-line draft ready, no order; desktop 1440×1000/mobile 390×844 no overflow/four inputs visible/console warnings-errors empty. B4 changes only input length; unchanged CFF media/owner proof remains valid | One owner camera/voice observation each, not broad hardware/recognition certification |
-| R5 — private source | Independent staged backend review found no further material issue; original catalog matrix checked all four hashes; current known-secret/earlier asset scan and private GitHub status passed | Only final private source release checks and commit/push pending |
-| R6 — handoff | Current workflows, constraints, public URL and reproducible verification are documented; [FINAL_QA_REPORT.md](FINAL_QA_REPORT.md) records defects and remaining gates | Only private source commit/push handoff pending; hosted and customer verification is complete in its stated scopes |
+| R5 — private source | Independent staged backend review found no further material issue; original catalog matrix checked all four hashes; current known-secret/earlier asset scan and private GitHub status passed | Passed: private implementation `829207f` reviewed, scanned and pushed |
+| R6 — handoff | Current workflows, constraints, public URL and reproducible verification are documented; [FINAL_QA_REPORT.md](FINAL_QA_REPORT.md) records defects and remaining gates | Passed: private source `829207f` pushed; hosted and customer verification is complete in its stated scopes |
 
 Complete-catalog QA passed 12/12 local groups in 39.882s and 12/12 hosted groups in 378.345s. Hosted history/release checks made four fixture drafts/one reuse, preserved preferences and zero QA-buyer spending, and created no orders/model/supplier calls. The isolated safety/history/parser/preference run passed 103 tests, including 50 safety and 9 history cases. These overlap the 285-test suite and must not be added into a new total.
 
@@ -125,4 +125,4 @@ The original brief explicitly permits an honestly labelled simulated order when 
 
 Organization identity federation, customer-admin policy editing, arbitrary recipe import, distributed limits, multi-replica scaling and actual supplier order/invoice operations remain credible production extensions. Missing supplier claims, deposits/variable-weight charges, unknown delivery facts and excluded service fees are disclosed data/transaction limits. None authorizes silent constraint relaxation or a narrower substitute for the core workflows above. Completion requires the essential behavior and final release evidence, not implementation of every speculative production extension.
 
-Recorded final B4 code/build/deployment/continuity/long-name gates and scoped Bk render/layout/CFF media/owner gates passed. Only private source commit/push/handoff remains pending. Missing supplier facts never authorize invented facts.
+Recorded final B4 code/build/deployment/continuity/long-name gates and scoped Bk render/layout/CFF media/owner gates passed. Implementation `829207f` was reviewed, scanned and pushed to private `codex/aimo-order-desk`. Missing supplier facts never authorize invented facts.

@@ -1,6 +1,6 @@
 # Final QA continuation — Valio Aimo
 
-Snapshot: 14 November 2026, Europe/Helsinki. The release coordinator recorded **285 backend tests passing in 83.21s**, frontend builds and **7 microphone /7 camera /8 image-normalization checks**. Catalog/history, hosted image/owner retests and Bk rendering/visual checks passed. Final **`index-B4p90PsT.js`** adds bounded support for every actual long catalog name; its deployment, **12 continuity checks** and hosted 155-character selection/follow-up passed. Media/reconciliation components are unchanged. Only private-source handoff remains **ROOT_PENDING**.
+Snapshot: 14 November 2026, Europe/Helsinki. The release coordinator recorded **285 backend tests passing in 83.21s**, frontend builds and **7 microphone /7 camera /8 image-normalization checks**. Catalog/history, hosted image/owner retests and Bk rendering/visual checks passed. Final **`index-B4p90PsT.js`** adds bounded support for every actual long catalog name; its deployment, **12 continuity checks** and hosted 155-character selection/follow-up passed. Media/reconciliation components are unchanged. Implementation `829207f` was reviewed, scanned and pushed to private `codex/aimo-order-desk`.
 
 ## Bugs and implemented fixes
 
@@ -53,6 +53,6 @@ Initial catalog failures remain in ignored `.local/catalog-qa-baseline.json`; an
 | History and identity | Open/reuse/archive/restore/remove/reload, retained evidence, scoped login/Remember Me | **Passed in stated scope:** private-B hosted checks plus coordinator's 47-check/browser evidence; B had no pre-existing receipts |
 | Responsive/accessibility review | Desktop/mobile layout, navigation, stable controls and console | **Passed in stated scope:** final Bk desktop/mobile screenshots inspected, no overflow, four inputs visible, stable repeated-choice/reload behavior and empty warning/error logs |
 | Final hosted release and recovery | B4 revision, cookies/preferences/spend/old receipts and protected backup through redeploy | **Passed:** final B4 public asset/health/media policy and 12 continuity checks /69.561s; unchanged media/reconciliation retain the documented CFF/Bk proof |
-| Private source and handoff | Reviewed diff/secret/data scan, original hashes, private commit/push, final URL/commit/check guide and accurate limitations | **ROOT_PENDING** |
+| Private source and handoff | Reviewed diff/secret/data scan, original hashes, private commit/push, final URL/commit/check guide and accurate limitations | **Passed:** private implementation `829207f` reviewed, scanned and pushed; known credentials excluded and all four original data hashes intact |
 
-Final readiness remains conditional on the explicitly pending gates. Unknown allergen/certification, package, price, stock or delivery facts may correctly block a basket. Orders remain simulated; no real purchase, reservation, payment, paid upgrade or final Junction submission is authorized by this QA work.
+The recorded release gates are complete within the scopes above. Unknown allergen/certification, package, price, stock or delivery facts may correctly block a basket. Orders remain simulated; no real purchase, reservation, payment, paid upgrade or final Junction submission is authorized by this QA work.

@@ -1,6 +1,6 @@
 # Extended directive — acceptance and evidence matrix
 
-Snapshot: 14 November 2026, Europe/Helsinki. Final `index-B4p90PsT.js` is deployed through [A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site): **285 tests (83.21s)**, **12 continuity checks (69.561s)** and **3 hosted long-name checks** passed. Bk render/layout, catalog/history and unchanged CFF media/owner evidence remain valid in their stated scopes. Only private commit/push remains pending. Build identifiers are not Git commits.
+Snapshot: 14 November 2026, Europe/Helsinki. Final `index-B4p90PsT.js` is deployed through [A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site): **285 tests (83.21s)**, **12 continuity checks (69.561s)** and **3 hosted long-name checks** passed. Bk render/layout, catalog/history and unchanged CFF media/owner evidence remain valid in their stated scopes. Implementation `829207f` was reviewed, scanned and pushed to private `codex/aimo-order-desk`. Build identifiers are not Git commits.
 
 ## Current observed evidence
 
@@ -68,7 +68,7 @@ Snapshot: 14 November 2026, Europe/Helsinki. Final `index-B4p90PsT.js` is deploy
 
 ## Remaining release audit
 
-Final B4 code/build/deployment/continuity/long-name checks and scoped Bk layout/CFF media/owner proof passed. Only final private source release checks, commit/push and handoff remain pending. Original hashes/privacy checks passed; broader production contracts, recognition coverage, latency and confidential-provider suitability remain limits.
+Final B4 code/build/deployment/continuity/long-name checks and scoped Bk layout/CFF media/owner proof passed. Implementation `829207f` was reviewed, scanned and pushed to private `codex/aimo-order-desk`. Original hashes/privacy checks passed; broader production contracts, recognition coverage, latency and confidential-provider suitability remain limits.
 
 Keep credentials, restricted raw catalog data and private detailed runtime reports outside public source/assets. The customer guide remains the ASCII [WEBSITE_CHECK_GUIDE.txt](WEBSITE_CHECK_GUIDE.txt). The evidence here proves the stated scopes; it does not redefine the full mission around a smaller subset.
 

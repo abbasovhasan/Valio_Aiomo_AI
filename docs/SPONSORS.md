@@ -71,7 +71,7 @@ The main build session executed:
 .venv/bin/python scripts/agent_client.py --mode live --model --commit --output .local/external-live-proof.json
 ```
 
-At approximately **05:03 Helsinki**, the independent process called NVIDIA and received `live_tool_call`, sent selected IDs through the real HTTP gateway, obtained live Valio sandbox evidence, and persisted a **simulated** order through Aiven PostgreSQL. Repeating commitment returned the same receipt (`duplicate_returned_same_receipt: true`). The scoped verification endpoint reported record integrity and scope valid. This is gateway record consistency, not a digital signature, independent product truth, stock reservation or delivered goods.
+The first run completed at approximately **05:03 Helsinki**; a later release smoke repeated it successfully. In these runs, the independent process called NVIDIA and received `live_tool_call`, sent selected IDs through the real HTTP gateway, obtained live Valio sandbox evidence, and persisted a **simulated** order through Aiven PostgreSQL. Repeating commitment returned the same receipt (`duplicate_returned_same_receipt: true`). The scoped verification endpoint reported record integrity and scope valid. This is gateway record consistency, not a digital signature, independent product truth, stock reservation or delivered goods.
 
 The gateway agent separately exercised the same client against an isolated server on port 8001 with `--base-url http://127.0.0.1:8001`; it also completed the live/model/simulated-order path. The local evidence file may contain the latest of these runs. Do not publish the raw product/evidence content.
 

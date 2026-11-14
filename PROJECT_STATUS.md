@@ -13,4 +13,4 @@
 
 Read `docs/DELIVERY.md` for reviewer steps, exact executed checks, deployment prerequisites and limitations. Official public schedule freshly confirmed: 15 November 2026 10:00 Helsinki; authenticated challenge-rule reread unavailable. Never finalize automatically.
 
-Final release work: private-source scan and private Git push (verification appended to delivery when complete).
+Release verified: private-source scan passed for all 52 staged files (including extracted pitch text); all four dataset checksums match. Source pushed to origin/codex/aimo-order-desk; GitHub privacy rechecked true. Working tree clean at release.

@@ -120,7 +120,8 @@ Modal hosts CPU FastAPI/private volumes under the existing verified Junction gra
 and spending cap; it does not host these large NVIDIA models. Actual local complete
 app+catalog+OCR+Whisper base peak RSS 882.4 MiB motivated 1 CPU / 1,536 MiB headroom.
 The deployed media observations above are not a concurrency or latency guarantee.
-The old rounded Modal usage snapshot $0.01 USD is not a current NVIDIA usage balance.
+A November Modal CLI usage report observed $0.04369075 USD total at the release
+check. This is not a final bill, remaining balance or NVIDIA inference charge.
 
 PRIVACY, LIMITATIONS AND IMPROVEMENT
 

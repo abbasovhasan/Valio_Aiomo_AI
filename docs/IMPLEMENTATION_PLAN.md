@@ -1,6 +1,6 @@
 # Procurement delivery plan and acceptance record
 
-Reviewed 14 November 2026 (Europe/Helsinki). This plan extends the retained milk trust demonstration into the requested purchasing workflow. The public A4TB baseline is deployed; current continuation changes require the final root release checks in [ACCEPTANCE_RECORD.md](ACCEPTANCE_RECORD.md). Source presence and targeted tests are not proof of the new deployed revision.
+Reviewed 14 November 2026 (Europe/Helsinki). This plan extends the retained milk trust demonstration into the requested purchasing workflow. The extended public A4TB release is deployed and verified: 171 backend tests, production build, 47 hosted checks, 13 restart checks and scoped interactive browser journeys passed. [ACCEPTANCE_RECORD.md](ACCEPTANCE_RECORD.md) records the exact evidence and limits.
 
 ## Repository assessment
 
@@ -10,10 +10,10 @@ Reviewed 14 November 2026 (Europe/Helsinki). This plan extends the retained milk
 | Stack | React 19/TypeScript/Vite; Python/FastAPI/Pydantic; Decimal; PostgreSQL or SQLite | Suitable for typed AI tools and reliable arithmetic |
 | Implemented before this update | Three-SKU milk mandate, NVIDIA shortlist, Valio price/availability reads, exact approval, stale repair, idempotency, audit; review-only meal planning | Keep all existing routes and scenarios |
 | Missing before this update | Free text could not author a multi-item cart; no generic priced cart, saved conversation, basket approval or checkout | Add isolated generic procurement module and primary Smart order UI |
-| Technical limitations found in audit | Earlier in-memory login/rate counters; private restricted catalog; incomplete package/dietary facts; static demo identity | Login hashes are now persisted; keep one hosting writer and unknown hard facts. Rate counters and demo identity remain scoped operating limits |
+| Technical limitations found in audit | Earlier in-memory login/rate counters; private restricted catalog; incomplete package/dietary facts; static demo identity | Login hashes are now persisted; keep one hosting writer and unknown hard facts. Authentication throttles, private accounts and Remember Me are now persisted; general business rate counters remain process-local and real supplier identity is outside the simulator |
 | Bugs/inconsistencies found | Meal cohorts rounded separately; ambiguous dietary overlap; sales-unit versus dimensional price limits; repeated query line IDs; post-refresh retry keys | Aggregate before rounding; explicit overlap; dimensional limits; distinct cohort identities; durable retry keys and read-only receipt verification |
 | Reusable components | Auth, store transactions, sponsor clients, static catalog, visual system, milk policy/tests | Preserve rather than rebuild |
-| Improvements | Generic metadata/conversions; persisted versioned carts; structured interpretation; customer controls; aggregate approval; explicit preference/discovery/comparison contracts | Source implemented in separate modules. Prior baseline and targeted continuation results are distinguished in the acceptance record |
+| Improvements | Generic metadata/conversions; persisted versioned carts; structured interpretation; customer controls; aggregate approval; explicit preference/discovery/comparison contracts | Implemented and deployed in separate modules; the acceptance record distinguishes final runtime/browser evidence from historical results |
 | Demo risks | Sponsor outages, missing product claims, proposed recipe safety, cold starts, quote expiry, synthetic spending cap | Label fixtures and unknowns; error recovery; refresh exact quote; rehearse complete supported cart |
 
 ## Stack decision

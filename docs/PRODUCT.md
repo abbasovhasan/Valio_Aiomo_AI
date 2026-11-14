@@ -10,7 +10,7 @@ A professional kitchen describes a purchasing need, compares actual catalog prod
 
 **Trust scenarios** preserves the original milk-agent demonstration: an attractive shortcut is blocked, a permitted exception needs exact separate approval, and stale facts require a new decision. The original decision recorder and external buyer client remain useful evidence of that authority boundary.
 
-Current source also adds required versus preferred brand/origin/organic handling, bounded semantic query expansion and supplier-linked alternatives, stock classifications, exact basket-cost comparisons, richer product evidence and complete receipt details. These changes are visible in source and targeted tests; final full-suite, hosted API and browser verification of this revision remain pending. See [acceptance record](ACCEPTANCE_RECORD.md) for release gates.
+The deployed extension adds required versus preferred brand/origin/organic handling, bounded semantic query expansion and supplier-linked alternatives, stock classifications, exact basket-cost comparisons, richer product evidence and complete receipt details. Private accounts/Remember Me, saved preferences, editable local speech/OCR and combined input are also deployed. The final suite passed 171 tests, hosted verification passed 47 checks and restart recovery passed 13 checks; actual browser scope is in the [acceptance record](ACCEPTANCE_RECORD.md).
 
 ## Customer evidence and hypothesis
 
@@ -26,7 +26,7 @@ Sources and their limits are in [customer discovery](../research/CUSTOMER_DISCOV
 - Price and availability are customer/date-specific evidence, not reservations or guarantees. Unknown dietary evidence, conversion conflicts, unsupported charges and unknown supplier quantities remain visible.
 - A complete draft may be within the buyer's configured authority or require a separately authenticated customer manager. Approval binds the exact basket and expires with its quote; changed facts require fresh checks.
 - Confirmation is idempotent and atomic against shared synthetic spending. A receipt records the simulator's items, requested date, subtotal and approval; it is not an invoice, supplier confirmation or delivery booking.
-- Source remains private. Restricted datasets and credentials remain outside Git and public frontend assets. The deployed service requires private buyer/approver codes.
+- Source remains private. Restricted datasets and credentials remain outside Git and public frontend assets. The deployed service supports shared private codes and invitation-gated private accounts with separate manager authorization.
 
 ## Challenge alignment
 

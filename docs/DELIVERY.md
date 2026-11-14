@@ -10,7 +10,7 @@ Public entry point: **[A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4
 - [Acceptance record](ACCEPTANCE_RECORD.md): requirement-to-evidence mapping and final source/handoff record.
 - [Deployment](DEPLOYMENT.md): runtime, persistence, financial controls and release procedure.
 
-Source repository: private `abbasovhasan/Valio_Aiomo_AI`, branch `codex/aimo-order-desk`. The previous procurement release is `ff0384c`; the extended release is identified by the final handoff and Git history on this same private branch.
+Source repository: private `abbasovhasan/Valio_Aiomo_AI`, branch `codex/aimo-order-desk`. The previous procurement release is `ff0384c`; the extended implementation release `947e417` was scanned and pushed on the same private branch. Subsequent documentation records the final handoff.
 
 ## Implemented application
 
@@ -36,7 +36,7 @@ The deployed extension adds hard versus soft brand/origin/organic controls, sema
 | Catalog contract | All 17,546 normalized product-detail records validated | Shape compatibility, not product safety or commercial completeness |
 | Historical PostgreSQL concurrency | Real Aiven TLS and isolated spend/idempotency checks passed | Hosted runtime remains single-writer SQLite |
 
-[Acceptance record](ACCEPTANCE_RECORD.md) maps the current requirements to this evidence; [extended acceptance](EXTENDED_ACCEPTANCE.md) covers personalization, identity, media and model evaluation. Private release scanning and commit/push are recorded with the final source handoff. Raw reports and credentials stay in ignored `.local/`.
+[Acceptance record](ACCEPTANCE_RECORD.md) maps the current requirements to this evidence; [extended acceptance](EXTENDED_ACCEPTANCE.md) covers personalization, identity, media and model evaluation. The implementation release passed a 54-file private-source scan, original dataset hash verification and GitHub privacy check before its push. Raw reports and credentials stay in ignored `.local/`.
 
 ## Demonstration and operating limits
 

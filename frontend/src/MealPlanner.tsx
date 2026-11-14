@@ -111,11 +111,14 @@ export function MealPlanner({
     e.preventDefault();
     if (!plan || dirty || quoting) return;
     if (!role) { onSignIn(); return; }
+    const fields = new FormData(e.currentTarget as HTMLFormElement);
+    const chosenDate = String(fields.get("delivery_date") ?? "");
+    const chosenBudget = String(fields.get("budget") ?? "");
     setQuoting(true); setQuoteError("");
     try {
       const session = await api("/procurement/sessions/from-meal-plan", {
         method: "POST",
-        body: JSON.stringify({ plan_id: plan.id, selections: choices, mode: quoteMode, ...(quoteDate ? { date: quoteDate } : {}), ...(quoteBudget ? { budget: quoteBudget } : {}) }),
+        body: JSON.stringify({ plan_id: plan.id, selections: choices, mode: quoteMode, ...(chosenDate ? { date: chosenDate } : {}), ...(chosenBudget ? { budget: chosenBudget } : {}) }),
       });
       onQuoteSession?.(session.id);
     } catch (e) { setQuoteError((e as Error).message); }
@@ -329,8 +332,8 @@ export function MealPlanner({
                 <h3>Turn this recipe into a quoted basket.</h3>
                 <p>Keep your ingredient quantities, dietary groups and selected candidates. The purchasing workspace consolidates shared products, checks prices and availability, and highlights any requirements still unresolved.</p>
                 <div className="planner-quote-fields">
-                  <label>Requested delivery<input aria-label="Meal plan delivery date" type="date" required value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} disabled={quoting || dirty} /></label>
-                  <label>Maximum budget (€)<input aria-label="Meal plan maximum budget" type="number" min="0" step="0.01" placeholder="Optional" value={quoteBudget} onChange={(e) => setQuoteBudget(e.target.value)} disabled={quoting || dirty} /></label>
+                  <label>Requested delivery<input name="delivery_date" aria-label="Meal plan delivery date" type="date" required value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} disabled={quoting || dirty} /></label>
+                  <label>Maximum budget (€)<input name="budget" aria-label="Meal plan maximum budget" type="number" min="0" step="0.01" placeholder="Optional" value={quoteBudget} onChange={(e) => setQuoteBudget(e.target.value)} disabled={quoting || dirty} /></label>
                   <label>Quotation source<select value={quoteMode} onChange={(e) => setQuoteMode(e.target.value)} disabled={quoting || dirty}><option value="fixture">Rehearsal fixture · authored prices & stock</option><option value="live">Live Valio sponsor sandbox</option></select></label>
                 </div>
                 {quoteError && <p className="planner-error" role="alert">{quoteError}</p>}

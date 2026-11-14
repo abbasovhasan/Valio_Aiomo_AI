@@ -1,0 +1,16 @@
+.auth-dialog { margin: auto; width: min(520px, calc(100vw - 32px)); max-height: 90dvh; overflow: auto; border: 1px solid #d0d4c5; color: #203e2d; }
+.auth-dialog::backdrop { background: #10291f9e; backdrop-filter: blur(4px); }
+.auth-methods { display: flex; gap: 4px; margin: 20px 0; padding: 4px; border-radius: 7px; background: #e8eddf; }
+.auth-methods button { flex: 1; background: transparent; color: #425b3e; border: 0; padding: 10px 5px; border-radius: 5px; font-size: 12px; cursor: pointer; }
+.auth-methods button[aria-pressed="true"] { background: #fffdf5; color: #203e2d; box-shadow: 0 1px 4px #223a2a15; }
+.auth-dialog form > input { margin-bottom: 10px; }
+.auth-dialog .auth-field-help { display: block; color: #54654b; font-size: 11px; line-height: 1.6; margin: -3px 0 13px; }
+.auth-dialog .auth-remember { display: flex; align-items: center; gap: 9px; font-size: 12px; letter-spacing: 0; text-transform: none; margin: 16px 0; cursor: pointer; }
+.auth-dialog .auth-remember input { width: 16px; min-height: 16px; height: 16px; margin: 0; accent-color: #31543d; }
+.auth-dialog .current-session { margin-bottom: 15px; }
+.auth-dialog .current-session small { display: block; line-height: 1.5; }
+.auth-workspace { margin: 9px 0; font-size: 12px; color: #435b3e; }
+.auth-workspace summary { cursor: pointer; padding: 8px 0; }
+.auth-workspace small { display: block; line-height: 1.6; font-size: 11px; }
+.auth-dialog button:focus-visible, .auth-dialog input:focus-visible, .auth-workspace summary:focus-visible { outline: 3px solid #55764a; outline-offset: 3px; }
+@media(max-width:600px) { .auth-dialog { padding: 24px 18px; } .auth-methods button { min-height: 44px; } .auth-dialog .auth-remember { min-height: 44px; } }

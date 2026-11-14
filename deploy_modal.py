@@ -14,7 +14,10 @@ catalog_volume = modal.Volume.from_name("aimo-private-catalog-v1", create_if_mis
 state_volume = modal.Volume.from_name("aimo-demo-state-v1", create_if_missing=True, version=2)
 image = (
     modal.Image.debian_slim(python_version="3.12")
+    .apt_install("tesseract-ocr", "tesseract-ocr-eng", "tesseract-ocr-fin", "libgomp1")
     .pip_install_from_requirements("requirements.txt")
+    .add_local_dir(".local/model-bundle/whisper-base", remote_path="/opt/aimo-whisper-base", copy=True)
+    .env({"AIMO_WHISPER_MODEL_PATH": "/opt/aimo-whisper-base"})
     .add_local_dir("backend", remote_path="/app/backend", ignore=["**/__pycache__/**", "**/*.pyc"])
     .add_local_dir("frontend/dist", remote_path="/app/frontend/dist")
 )
@@ -24,8 +27,8 @@ image = (
     image=image,
     secrets=[modal.Secret.from_name("aimo-order-desk-runtime")],
     volumes={"/app/data": catalog_volume, "/app/.local": state_volume},
-    cpu=0.5,
-    memory=1024,
+    cpu=1,
+    memory=1536,
     min_containers=0,
     max_containers=1,
     scaledown_window=120,

@@ -1,4 +1,4 @@
-A4TB · Valio Aimo — WEBSITE CHECK GUIDE
+A4TB - Valio Aimo - WEBSITE CHECK GUIDE
 Prepared 14 November 2026, Europe/Helsinki
 
 Website: https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site
@@ -7,6 +7,49 @@ This guide explains what to click, what to try and what a good result looks
 like. You do not need to know programming. Keep a note of anything confusing,
 missing or incorrect as you go.
 
+Current verification record (14 November 2026):
+
+  - The extended core is deployed at the website above. Its observed frontend
+    asset is index-C67pl32K.js; this is a build identifier, not a Git commit.
+  - 171 backend tests passed, and the production frontend build passed.
+  - 47 checks through the hosted application passed, including private
+    accounts, cookie lifetimes, preferences/isolation, cart changes, separate
+    manager approval by API, simulated receipts, local OCR/audio and live
+    NVIDIA/Valio reads.
+  - A pre-existing receipt survived the deployment. The shared demonstration
+    spending ledger was preserved and left unchanged by these hosted checks;
+    their simulated commitments used a separate registered QA workspace.
+  - A local browser check combined an image and an authored audio clip into
+    editable order text, exercised a product filter, recorded a EUR 14.00
+    simulated receipt and recovered it after reload. Its requested date was
+    explicitly corrected to 17 November 2026 before confirmation.
+  - The user separately tested the real microphone on the public website and
+    reported that the transcript was correct, including their accent. This
+    is one user-reported real recording success, distinct from authored-clip
+    automated checks and not a general speech-accuracy measurement.
+
+  - The private-manager local browser journey also passed: an expired quote
+    blocked approval until the buyer refreshed it; the separate manager then
+    approved the exact EUR 1,725 cart, the buyer confirmed it, and the saved
+    receipt showed the approver/time and passed verification.
+  - The recipe overlap browser check passed: for 500 diners, 100 vegetarian
+    and 50 gluten-free, entering 20 and "Apply overlap" cleared the question
+    and recalculated 10 ingredient requirements into 11. The editable default
+    meal plan also displayed the expected 370/30/80/20 diner cohorts.
+
+  - The saved Meal planner -> Smart order browser bridge also passed: the
+    default plan transferred as 11 ingredient requests with the exact date
+    17 November 2026. It required fresh chef acknowledgement, recorded that
+    acknowledgement, and still blocked confirmation for missing dietary claims.
+  - Desktop 1440x1000 and mobile 390x844 receipt views were visually inspected
+    without horizontal overflow. The native filter control was tested by
+    keyboard.
+
+The steps below remain a checklist for your own review, not a promise that
+every device, accent, image, sort combination or possible purchasing request
+was tested. A blocked meal caused by missing evidence is not a completed
+purchase, and no recipe acknowledgement can make an unknown claim true.
+
 The application is a challenge prototype. Every order is simulated. It does
 not place a Valio Aimo order, reserve stock, issue an invoice or take payment.
 
@@ -14,18 +57,18 @@ not place a Valio Aimo order, reserve stock, issue an invoice or take payment.
 1. OPEN THE WEBSITE AND SIGN IN
 
 Open the website above. On a phone, open the navigation menu if needed.
-Choose “Smart order”.
+Choose "Smart order".
 
-Click “Open your desk” in the upper-right corner. The sign-in window is called
-“Your place at the desk.” Enter the private buyer code in “ACCESS CODE”, then
-click “Open this session”. The profile should now identify the buyer role.
+Click "Open your desk" in the upper-right corner. The sign-in window is called
+"Your place at the desk." Enter the private buyer code in "ACCESS CODE", then
+click "Open this session". The profile should now identify the buyer role.
 
 Where to find the codes privately:
 
   The project owner can open this file on the prepared computer:
   /home/hasan/Documents/ChatGPT/Valio_Aiomo_AI/.local/access.json
 
-  The file contains a “buyer” value and a separate “approver” value. In the
+  The file contains a "buyer" value and a separate "approver" value. In the
   file manager, Ctrl+H shows hidden folders such as .local. Copy only the
   required value into the website's password field. Do not paste either code
   into chat, this guide, screenshots or a public document.
@@ -34,11 +77,32 @@ Where to find the codes privately:
   code is not accepted, ask the project owner for the current deployment's
   buyer or approver code through an appropriate private channel.
 
+You can also create your own private demonstration workspace:
+
+  - In the sign-in window, choose "Create workspace".
+  - Enter "Your name", a "Username" (3-40 supported characters) and a
+    "Password" of 12-128 characters.
+  - Enter the installation's private buyer code in "Buyer invitation code".
+  - Click "Create my workspace". No email address is required.
+  - Later, use "Account sign-in", your username/password and "Sign in".
+
+The invitation creates an isolated demonstration workspace. It is not a
+Valio Aimo customer registration or contract. Your saved preferences, cart,
+simulated spending and receipts belong to that workspace. Two accounts must
+not see or change each other's private records.
+
+"Remember me for 30 days on this device" is optional. With it checked, the
+browser receives a persistent sign-in cookie with a 30-day server expiry.
+Without it, the cookie is for the browser session and the server expiry is
+8 hours. Browser session-restore settings can retain session cookies; use
+"Sign out" to revoke the session explicitly. Neither choice saves your
+password in this application's local storage.
+
 The buyer creates and edits carts and confirms permitted simulated orders.
 The approver can approve an exact eligible cart but cannot act as its buyer.
 Changing a label or describing yourself as a manager does not grant that role.
 
-If an old cart reopens, click “New request” before beginning a fresh example.
+If an old cart reopens, click "New request" before beginning a fresh example.
 This starts a new cart; it does not erase previously recorded receipts.
 
 
@@ -49,9 +113,10 @@ For a predictable first check, enter:
   I need 20 litres of lactose-free milk and 10 kg of cheese delivered by
   Monday. Choose the cheapest suitable products.
 
-Click the “Rehearsal fixture” control below the request box to inspect the
-settings. Keep the source as “Rehearsal fixture · authored prices & stock”.
-Click “Build my cart”.
+Click the "Rehearsal fixture" control below the request box to inspect the
+settings. Keep the source as "Rehearsal fixture  -  authored prices & stock".
+Leave "Use NVIDIA for nonconfidential demo requests" unchecked for this repeatable,
+local-parser check. Click "Build my cart".
 
 Look for these results:
 
@@ -60,20 +125,20 @@ Look for these results:
   - Product cards show actual catalog names and SKU numbers.
   - Each card shows the sales package, order quantity, quantity after rounding,
     sales-unit price and line total.
-  - A selected card has a “Selected” mark and an explanation of the selection.
+  - A selected card has a "Selected" mark and an explanation of the selection.
   - The right-hand shopping cart contains the selected products.
   - The quotation is explicitly labelled as a rehearsal fixture.
 
-The system may ask you to “Choose” a suitable product. Click a valid candidate
+The system may ask you to "Choose" a suitable product. Click a valid candidate
 rather than guessing its name in a message. A blocked candidate must explain
 why it cannot be chosen.
 
 The fixture prices and stock are authored test values. The product identities
-and specifications come from the supplied challenge catalog. “Cheapest” means
+and specifications come from the supplied challenge catalog. "Cheapest" means
 lowest rounded item subtotal among the retrieved compliant candidates; it is
 not a guarantee of the cheapest possible basket across the entire catalog.
 
-Next, if useful, try the “Stock the breakfast kitchen” example. It requests
+Next, if useful, try the "Stock the breakfast kitchen" example. It requests
 200 litres of lactose-free milk, 10 kg of butter and 5 kg of cheese. Check all
 three groups. An inconsistent or missing package conversion should produce a
 visible issue, not an invented quantity or a silently accepted huge package.
@@ -81,22 +146,22 @@ visible issue, not an invented quantity or a silently accepted huge package.
 
 3. CHECK QUANTITIES AND PACKAGE ROUNDING
 
-Under a requested product, inspect “Required quantity”. Change the number and
-click “Update”. The product quotation and cart should be recalculated.
+Under a requested product, inspect "Required quantity". Change the number and
+click "Update". The product quotation and cart should be recalculated.
 
 You can also make a conversational change. In the request box enter:
 
   Reduce the cheese to 5 kg.
 
-Click “Update my cart”. The cheese quantity should change while the milk
+Click "Update my cart". The cheese quantity should change while the milk
 quantity, lactose-free rule and unrelated selections remain intact.
 
 For the breakfast example, try:
 
   Reduce the butter to 5 kg.
 
-Where whole packs supply more than requested, look for “extra from whole
-packs”. The cart should show requested and ordered quantities and the surplus.
+Where whole packs supply more than requested, look for "extra from whole
+packs". The cart should show requested and ordered quantities and the surplus.
 Do not assume litres and kilograms are interchangeable.
 
 If the same product supplies more than one recipe group, the purchasing cart
@@ -107,53 +172,117 @@ together yourself.
 
 4. COMPARE AN ALTERNATIVE OR REFINE A PRODUCT SEARCH
 
-Open “Product evidence” on a candidate. Check its brand, declared claims,
-origin information, source and any evidence gaps. Unknown information should
-remain unknown.
+Open "Product evidence" on a candidate. Where supplied, it shows the brand,
+manufacturer, declared origin, dietary/organic evidence, ingredients, allergen
+declarations and storage instructions. It also shows package evidence, available
+quantity, the estimated available date, historical delivered quantity, catalog
+source and catalog update time.
 
-Click “Choose” on another suitable candidate. Check that the cart, price and
+Unknown information should remain unknown. A catalog update date is not proof
+of current stock. Historical delivered quantity is not an on-time guarantee.
+Allergen supplier codes may remain visible when their meaning is not supplied;
+missing declarations must not be presented as proof that an allergen is absent.
+Open "How the package conversion is supported" to inspect its recorded basis.
+A category-average carbon estimate, where shown, is not a measured product
+footprint or a measured saving.
+
+Open "Sort & filter products" on an ingredient request. Try "Sort by":
+
+  - "Suggested order".
+  - "Item subtotal - lowest first".
+  - "Price per [requested unit] - lowest first".
+  - "Brand - A to Z".
+  - "Declared origin - A to Z".
+  - "Available date - earliest first".
+
+The actual UI uses a separator between each label's two parts. Unknown prices,
+brands, origins or dates sort after known values. The selected product remains
+pinned so it is not lost when you sort.
+
+Try "Brand", "Origin includes", "Declared attributes" and
+"Compliant choices only". Attribute filters require explicit supplied claims;
+unknown does not mean a match. Check the "X of Y products match" count. If the
+selected product falls outside the filter, it must remain visible with a
+notice. "Reset view" clears the view settings. No result should explain the
+empty filter and offer a reset, rather than silently change your order.
+
+The first four candidates are shown initially. "Compare N more products"
+opens the rest. Every returned product should remain inspectable and, when
+valid, selectable. Sorting and filtering only change the view; they do not
+relax hard constraints or change your cart by themselves.
+
+Prices and recommendations cover the retrieved candidates and rounded
+quantities. They are not proof of the cheapest possible basket across the
+entire catalog. A "Basket change" figure is meaningful only when the server
+supplies a valid full-basket comparison; do not invent a difference otherwise.
+
+Click "Choose" on another suitable candidate. Check that the cart, price and
 selected mark update without removing the other requested products.
 
-To search for a more suitable product, edit “Product search” on the relevant
-request and click “Find products”. For example, refine a broad cheese search
-to “cheddar”.
+To search for a more suitable product, edit "Product search" on the relevant
+request and click "Find products". For example, refine a broad cheese search
+to "cheddar".
 
 Expected result: only that product search changes. Its required quantity and
 hard dietary/origin requirements stay in place. A cheaper substitute must not
 silently waive a hard requirement.
 
-To remove an item deliberately, use its bin icon (“Remove” followed by the
+To remove an item deliberately, use its bin icon ("Remove" followed by the
 product request). The cart should update and unrelated items should remain.
+
+
+4A. SAVE YOUR USUAL BUYING PREFERENCES
+
+Open "Buying preferences" below the request composer while signed in as buyer.
+Try a "Purchasing priority": balanced comparison, lowest rounded item cost,
+manual quality-specification review, preferred origin, or earliest verified
+availability. You can also set "Preferred brand", "Preferred origin" and
+"Prefer verified organic products". Click "Save preferences".
+
+Reload and check that the saved values return in the same buyer workspace.
+Start "New request". "Use saved preferences for this new request" controls
+whether those soft defaults are applied. Explicit request instructions and
+hard dietary, origin, brand and budget requirements take priority.
+
+Saving a preference must not rewrite a cart already under review. Check that
+the current quantities, selections and quote do not silently change.
+"Clear saved preferences" resets the saved defaults; it does not delete orders.
+
+To check isolation, sign into a different private workspace. It must not load
+the first buyer's preferences or saved-cart pointer. Sign back into the first
+workspace to recover its own records. The shared demonstration is intentionally
+shared by people using the same demonstration code.
+
 
 
 5. CREATE AND RESOLVE A BUDGET CONFLICT
 
 In the shopping cart, enter a deliberately low value such as 1 in
-“Maximum budget (€)”. Click “Apply requirements”.
+"Maximum budget (EUR )". Click "Apply requirements".
 
 Expected result:
 
   - The budget balance shows that the selected items exceed the budget.
   - The reason is explained.
-  - “Review & confirm” is unavailable.
+  - "Review & confirm" is unavailable.
   - The application does not quietly remove items or increase the budget.
 
 Correct the budget by entering an amount above the displayed item subtotal,
-or remove the optional budget value. Click “Apply requirements” again.
+or remove the optional budget value. Click "Apply requirements" again.
 Alternatively, reduce quantities or choose cheaper compliant products.
 
 The hard customer budget and the buyer's purchasing authority are different:
 raising your budget does not grant the buyer more approval authority.
 
-“Item subtotal” includes quoted item prices and tax. Delivery and service
+"Item subtotal" includes quoted item prices and tax. Delivery and service
 charges are excluded from this simulation. It is not a final commercial bill.
 A partial cart must clearly say that requests still need attention.
 
 
 6. CHECK DELIVERY AND EXPIRED QUOTATIONS
 
-Check “Requested delivery” in the cart. Choose a valid date and click
-“Apply requirements”. Delivery estimates must relate to that date.
+Check "Requested delivery" in the cart. Choose a valid date and click
+"Apply requirements". Delivery estimates must relate to that date.
 
 Use a date from today through the next 30 days. On 14 November 2026, the next
 Monday is 16 November 2026. On later test days, choose an appropriate current
@@ -164,21 +293,21 @@ should keep the full cart from being confirmed.
 
 A quotation is short-lived. Leave an otherwise ready cart open until its
 shown validity time passes. It should show that the quote expired and prevent
-approval or confirmation. Click “Refresh prices & availability”, then review
+approval or confirmation. Click "Refresh prices & availability", then review
 the current quotation. Refreshing creates a fresh decision; previous exact
 approval must not automatically apply to changed facts.
 
-For a faster controlled stale-offer example, open “Trust scenarios”, choose
-“The offer changes”, click “Send to buyer agent”, and use
-“Refresh this exact offer”.
+For a faster controlled stale-offer example, open "Trust scenarios", choose
+"The offer changes", click "Send to buyer agent", and use
+"Refresh this exact offer".
 The comparison should explain what changed.
 
 
 7. TEST THE 500-DINER MEAL REQUEST
 
-In “Smart order”, click “New request” and choose “Bolognese for 500 diners”.
+In "Smart order", click "New request" and choose "Bolognese for 500 diners".
 Its request includes 20% vegetarian diners, 10% gluten-free diners and an
-overlap of 20 diners who need both. Click “Build my cart”.
+overlap of 20 diners who need both. Click "Build my cart".
 
 Expected result:
 
@@ -189,25 +318,32 @@ Expected result:
   - The application does not claim the complete meal can be purchased merely
     because some ingredients matched.
 
-Review the recipe and click “I have reviewed the proposed recipe” only after
+Review the recipe and click "I have reviewed the proposed recipe" only after
 you have actually reviewed it. This records a review; it is not a food-safety
 certification. Unresolved product requirements must still block confirmation.
 
 Also try a request that mentions vegetarian and gluten-free percentages but
 omits the overlap. The assistant should ask how many diners need both, rather
-than assume an overlap silently.
+than assume an overlap silently. In "Diners who need both diets", enter 20 and
+click "Apply overlap". Enter 0 only if the groups do not overlap. Check that the
+question clears and the ingredient requirements are recalculated. If you
+provided a valid overlap already, it should not ask the same question again.
+
+This direct overlap correction was observed in the local browser: the question
+cleared and the saved ingredient requests changed from 10 to 11. That is a
+recalculation result, not a claim that all dietary products became available.
 
 
 8. TRY THE EDITABLE MEAL PLANNER AND ITS SHOPPING-CART HANDOFF
 
-Choose “Meal planner”. Keep or enter:
+Choose "Meal planner". Keep or enter:
 
   Total diners:                       500
   Vegetarian diners:                  100
   Gluten-free diners:                  50
   Both vegetarian & gluten-free:       20
 
-Click “Build shopping plan”. Check that the four groups are:
+Click "Build shopping plan". Check that the four groups are:
 
   Meat standard:             370
   Meat gluten-free:           30
@@ -217,7 +353,7 @@ Click “Build shopping plan”. Check that the four groups are:
 Every diner should be counted once. Try an impossible overlap larger than a
 dietary group; the form should explain the inconsistency.
 
-Review the editable grams per diner under “Review the recipe”. Change a
+Review the editable grams per diner under "Review the recipe". Change a
 quantity or diner count and confirm that export/quotation requires rebuilding
 the plan. The source label should change appropriately when you enter your
 kitchen's own quantities. You can also try the optional carrot addition.
@@ -229,43 +365,52 @@ but a search result is still a proposal for chef review. Missing dietary
 claims or inconsistent package facts may leave an ingredient unresolved.
 Changing the purchasing priority does not create a verified quality score.
 
-In “Turn this recipe into a quoted basket”:
+In "Turn this recipe into a quoted basket":
 
-  - Set “Requested delivery”.
-  - Optionally set “Maximum budget (€)”.
-  - Keep “Quotation source” as the rehearsal fixture for a repeatable check.
-  - Click “Quote this shopping plan”.
+  - Set "Requested delivery".
+  - Optionally set "Maximum budget (EUR )".
+  - Keep "Quotation source" as the rehearsal fixture for a repeatable check.
+  - Click "Quote this shopping plan".
 
-The website should open “Smart order” with that saved plan's ingredient
+The website should open "Smart order" with that saved plan's ingredient
 quantities, dietary requirements, sourcing rules and chosen candidates.
 Shared products should be consolidated before final pack rounding. You can
-refine “Product search”, choose candidates and resolve remaining conflicts.
+refine "Product search", choose candidates and resolve remaining conflicts.
 
-“Export draft shopping plan (JSON) ↗” remains a draft export. Exporting the
+Observed browser result: the saved default plan transferred without requiring
+manual candidate selections, retained all 11 ingredient requests and kept the
+explicit 17 November 2026 date. Required amounts included 45 kg standard pasta,
+5 kg gluten-free pasta, 44.4/3.6 kg beef for the two meat cohorts and 5.6/1.4 kg
+lentils for the vegetarian cohorts. Availability evidence showed 17 November.
+These are ingredient requirements, not a claim that every product was ordered.
+Fresh chef acknowledgement was required and could be recorded. Missing dietary
+claims still kept confirmation blocked after that acknowledgement.
+
+"Export draft shopping plan (JSON)" remains a draft export. Exporting the
 file does not place or confirm an order.
 
 
 9. CHECK SEPARATE MANAGER APPROVAL
 
 Run this once in the fixture, after the smaller tests. Repeated confirmed
-orders consume a shared simulated spending allowance.
+orders consume that buyer workspace's simulated spending allowance.
 
-Start “New request” as buyer and enter:
+Start "New request" as buyer and enter:
 
   I need 1500 litres of lactose-free milk delivered by Monday.
   Choose the cheapest suitable product.
 
 With the default demonstration policy and fixture SKU 464306, the expected
-item subtotal is €1,725.00. Check the selected SKU and displayed price; do not
+item subtotal is EUR 1,725.00. Check the selected SKU and displayed price; do not
 assume that a different product or live quotation has this same amount.
 
-The default autonomous limit is €1,400.00 and the exception ceiling is
-€2,500.00. The cart should therefore show “Purchasing approval needed”, and
+The default autonomous limit is EUR 1,400.00 and the exception ceiling is
+EUR 2,500.00. The cart should therefore show "Purchasing approval needed", and
 the buyer must not be able to approve it personally.
 
-Click “Sign in as approver”. Enter the separate approver code in the sign-in
-window and click “Open this session”. Review the exact product, quantity,
-price, date and remaining issues, then click “Approve this exact cart”.
+Click "Sign in as approver". Enter the separate approver code in the sign-in
+window and click "Open this session". Review the exact product, quantity,
+price, date and remaining issues, then click "Approve this exact cart".
 
 Switch back to the buyer identity using the profile button and buyer code.
 The same saved cart should reopen. It should show that this exact cart has
@@ -275,11 +420,29 @@ Before confirming, optionally change the quantity or date. The old approval
 must be cleared because the approved cart has changed. Obtain fresh approval
 for the new exact cart if its value still requires it.
 
+For a private registered workspace, open your profile and click
+"Approve this workspace". It pre-fills "Manager workspace ID (optional)" in
+"Demo access". Enter the separate approver code and click "Open this session".
+Review and approve the exact cart in that workspace, then return through
+"Account sign-in" with the buyer's username and password to confirm.
+
+If the quote expires during the handoff, approval must stay blocked. Return
+as buyer, click "Refresh prices & availability", review the fresh exact cart,
+then return as manager for a new approval. The manager cannot refresh or edit
+the buyer's requirements merely to bypass expiry. This expiry -> refresh ->
+exact approval -> buyer confirmation -> receipt verification sequence passed
+the recorded local browser check for a EUR 1,725 private cart.
+
+A workspace ID alone grants no permissions, and entering the buyer code must
+not turn the buyer into an approver. Leave the manager workspace field blank
+only when intentionally returning to the shared demonstration.
+
 Hard-rule failures are different from budget approval. A manager must not be
 able to approve missing stock, an invalid conversion, a hard dietary failure
 or an exceeded hard customer budget.
 
-The shared cumulative cap is €6,000.00 by default. If earlier checks used it
+The cumulative cap is EUR 6,000.00 by default in each buyer workspace. The
+shared demonstration is one such workspace. If earlier checks used its cap
 up, ask the owner to prepare a clean demonstration ledger; do not expect a
 buyer or approver button to bypass it. Operator settings may change these
 demonstration thresholds.
@@ -289,17 +452,24 @@ demonstration thresholds.
 
 Use a complete, permitted cart with any required approval obtained.
 
-Click “Review & confirm”. Review the products, item subtotal and requested
-date. Then click “Confirm simulated order”.
+Click "Review & confirm". Review the products, item subtotal and requested
+date. Then click "Confirm simulated order".
 
-Expected result: “Simulated order recorded.” appears with an actual generated
-reference. It explicitly says that no supplier order, invoice or payment was
-created.
+Expected result: "Simulated order recorded." appears with an actual generated
+reference. The main workspace also shows "Your order, on the record." with the
+saved item list, exact sales-package quantities and planned quantity/surplus,
+requested delivery date, item subtotal, source and manager-approval record.
+Check these against the cart you reviewed.
 
-Click “Verify receipt”. It should report that the saved receipt matches the
+"What happens next?" explains that the simulation stops here. No supplier
+delivery is scheduled and no supplier order, invoice or payment is created.
+The requested date is a recorded request, not a delivery booking. An actual
+purchase would need your authorized supplier ordering channel and contract.
+
+Click "Verify receipt". It should report that the saved receipt matches the
 recorded order. This is a read-only check: it should not create another order
 or consume more of the simulated spending allowance. You can use
-“Verify receipt again” to repeat that check.
+"Verify receipt again" to repeat that check.
 
 Reload the browser. The saved cart and its simulated receipt should reopen
 after sign-in if necessary. The reference should be unchanged. A receipt is
@@ -308,14 +478,24 @@ not an invoice, a supplier confirmation or a guarantee of delivery.
 
 11. DISTINGUISH THE REHEARSAL FROM LIVE SERVICES
 
-Start a new request. Open the source settings using “Rehearsal fixture”.
-Select “Live Valio sponsor sandbox” to obtain actual challenge sandbox price
+Start a new request. Open the source settings using "Rehearsal fixture".
+Select "Live Valio sponsor sandbox" to obtain actual challenge sandbox price
 and availability reads. This is still a synthetic challenge environment;
 confirmation remains our simulation.
 
-The checkbox “Use NVIDIA to interpret the request in live mode” enables the
-hosted interpretation service. With it disabled, the local structured parser
-interprets the request while live sandbox lookups still supply price/stock.
+The checkbox "Use NVIDIA for nonconfidential demo requests" is independent of the
+price/stock source. The default is the local parser, with NVIDIA unchecked.
+You can deliberately choose any of these combinations:
+
+  Rehearsal fixture + NVIDIA off: local parser, authored prices and stock.
+  Rehearsal fixture + NVIDIA on: hosted interpretation, authored prices/stock.
+  Live sandbox + NVIDIA off: local parser, live sandbox prices and stock.
+  Live sandbox + NVIDIA on: hosted interpretation and live sandbox lookups.
+
+Checking NVIDIA can make a hosted model request even with fixture prices.
+Some supported recipe turns use the local deterministic recipe planner; the
+displayed interpretation source tells you which path actually ran. Do not
+assume that every result used NVIDIA simply because the checkbox was selected.
 
 Look for clear source labels. The fixture must never be presented as live.
 If a live service times out or returns an error, the application should show
@@ -323,27 +503,30 @@ the error and preserve the existing saved cart. It must not quietly substitute
 successful-looking fixture data. Hosted services can be temporarily unavailable;
 record the error separately from a failure of the local rehearsal workflow.
 
-Start another “New request” to change an existing cart's source. A source
-change should not silently alter an already reviewed quotation.
+Start another "New request" to change an existing cart's source or interpreter.
+A source change should not silently alter an already reviewed quotation.
 
 
 12. CHECK HARD FAILURES IN THE TRUST SCENARIOS
 
-“Trust scenarios” preserves the focused milk-order demonstration. It has its
+"Trust scenarios" preserves the focused shared milk-order demonstration. A
+private account is correctly blocked from this separate shared mandate; use
+Smart order in that private workspace, or switch through "Demo access" to the
+shared buyer code with the manager workspace field blank. The lab has its
 own requested litres, delivery date and evidence-source controls. Its typed
 quantity/date are authoritative for that demonstration.
 
-Try “A tempting shortcut”: a cheaper option that fails the dietary requirement
-must be blocked. Try “Quantity unknown”: unknown stock must not be treated as
-verified availability. Try “An untrusted instruction”: supplier text must not
+Try "A tempting shortcut": a cheaper option that fails the dietary requirement
+must be blocked. Try "Quantity unknown": unknown stock must not be treated as
+verified availability. Try "An untrusted instruction": supplier text must not
 change the purchasing rules or grant permission to place an order.
 
-“The milk runs out” demonstrates a controlled shortage and an eligible budget
+"The milk runs out" demonstrates a controlled shortage and an eligible budget
 exception. These are explicitly authored failure scenarios, including when
 shown as an overlay on live sandbox evidence.
 
-Open “Decision recorder” to inspect the focused scenario's recorded checks.
-“Gateway API” is a technical reference; judges can assess the normal customer
+Open "Decision recorder" to inspect the focused scenario's recorded checks.
+"Gateway API" is a technical reference; judges can assess the normal customer
 journey without using it.
 
 
@@ -370,26 +553,96 @@ With a keyboard:
   - Check that errors are readable and that controls have meaningful labels.
 
 
+13A. SPEAK OR UPLOAD A VOICE REQUEST
+
+In Smart order, click "Speak your order". Allow microphone access only when
+you intend to record. Say a short demonstration request such as:
+
+  I need twenty litres of lactose-free milk and five kilograms of butter
+  delivered by Monday.
+
+Click "Stop & transcribe". The recording automatically stops after 30 seconds.
+"Cancel recording" discards the current recording. After stopping normally,
+the clip is sent to this application's server for local Whisper transcription.
+It is not sent to an external speech provider by the default implementation.
+
+Inspect "Check the details before adding" and "Editable extracted text".
+Correct product names, numbers, units and dietary wording. Read any uncertainty
+messages. Click "Add this text to my request" only after review. It adds editable
+text to the request; it must not build or confirm a cart automatically.
+
+You can combine it with typed text, then click "Build my cart" or
+"Update my cart" yourself. "Upload audio" accepts an existing short audio
+clip instead of microphone recording. Files are limited to 5 MB and decoded
+audio to 30 seconds. A declined microphone permission must give a useful
+message and leave typing/audio upload available.
+
+
+13B. READ A PHOTO OR PRINTED SHOPPING LIST
+
+Click "Image reading & privacy". The default "Image reader" is
+"On this server - no external image service". This uses local Tesseract OCR
+for English/Finnish printed text. It runs on the application server, not
+inside your browser. Click "Add photo or list" and choose one clear JPEG or
+PNG of a nonconfidential demonstration shopping list. Keep it under 5 MB;
+the server also bounds image dimensions.
+
+Check the editable extracted text against the image. Fix uncertain characters,
+quantities and units before "Add this text to my request". A product photo
+without an explicit purchasing quantity must not cause an invented quantity.
+A blank, corrupt or unsupported file should explain the problem, not create
+an order.
+
+Optional cloud image check:
+
+  - Deliberately choose the NVIDIA vision option under "Image reader".
+  - Before choosing/uploading an image, confirm the checkbox stating that it
+    contains only nonconfidential demonstration content and may be sent to
+    NVIDIA's trial vision service.
+  - Without that consent, the cloud upload must be unavailable/rejected.
+  - Use only an authored demonstration list. Do not upload customer names,
+    credentials, contracts or confidential Valio Aimo material to that option.
+
+The local default does not send images to an external image service. The
+optional cloud reader receives a sanitized image after metadata removal.
+Uploaded files are processed for extraction rather than saved as workspace
+attachments. The text you choose to add becomes part of the purchasing request
+when you later submit it. These readers extract proposed text; inventory and
+financial facts are still checked independently by the purchasing engine.
+
+
+
 14. FINAL CHECKLIST FOR YOUR REVIEW
 
 [ ] I understood how to begin without a tutorial.
 [ ] The buyer and approver are clearly different identities.
+[ ] Private registration/login and Remember Me behave as described.
+[ ] Sign out revokes the current session and another workspace stays isolated.
 [ ] A mixed request produced separate product requirements.
 [ ] Quantities, pack rounding and surplus were understandable.
+[ ] Product evidence exposed supplied ingredient, storage and source details.
 [ ] A follow-up preserved unrelated products and hard requirements.
 [ ] I could compare, replace, search for and remove products.
+[ ] Sorting/filtering use actual fields, retain selection and offer counts/reset.
+[ ] Saved soft preferences persist and affect only new requests as chosen.
 [ ] A low budget blocked confirmation and could be corrected explicitly.
 [ ] Delivery dates, stock gaps and quote expiry were clearly explained.
 [ ] The 500-person dietary overlap was handled without double counting.
+[ ] A missing overlap could be supplied through its direct input control.
 [ ] A saved editable meal plan transferred into a dated quoted basket.
 [ ] Unsupported dietary/product evidence remained a visible conflict.
 [ ] Exact manager approval could not override a hard-rule failure.
 [ ] Changes invalidated approval where required.
 [ ] Confirmation produced a clearly simulated, generated receipt.
+[ ] Its saved items, requested date, approval and next steps were clear.
 [ ] Receipt verification did not create another order.
 [ ] Reload preserved the saved cart and receipt.
 [ ] Live and fixture evidence were labelled accurately.
+[ ] The NVIDIA choice was clearly separate from the price/stock source.
 [ ] A live service failure was shown honestly.
+[ ] Voice and image text remained editable before adding/building.
+[ ] Microphone denial and corrupt/large uploads had useful recovery.
+[ ] Optional cloud vision required explicit nonconfidential-demo consent.
 [ ] Phone layout and keyboard controls were usable.
 
 For each problem, record the request you entered, the source mode, the button
@@ -415,8 +668,16 @@ submission are not integrated. Historical delivered-quantity reliability is
 not an on-time-delivery guarantee. Public product listing is not proof of
 current orderable stock.
 
-Live service availability and prices may change. The rehearsal fixture is the
-repeatable way to assess the interaction and deterministic validation. The
-shared simulated spending allowance and policy expiry can affect later tests.
+Live service availability and prices may change. Fixture prices with the local parser
+are the repeatable way to assess the interaction and deterministic validation.
+The public-site microphone worked correctly in one user-reported accent test.
+Wider voice accuracy, noisy kitchens and real camera/handwriting coverage still
+need representative checks; a clean synthetic benchmark does not establish it. The
+workspace's simulated spending allowance and policy expiry can affect later tests.
 
 No final Junction project submission is performed by these website checks.
+
+Final persistence check: 13 additional checks passed after a server redeployment.
+The same remembered session, account login, preferences, simulated spending and
+three saved receipts/approval records recovered. A private backup passed SQLite
+integrity; this check created no new orders.

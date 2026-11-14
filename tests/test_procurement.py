@@ -12,6 +12,8 @@ from backend import interpretation, procurement
 from backend.config import BUYER, CUSTOMER, MANDATE
 from backend.store import Store
 
+REAL_INTERPRET = interpretation.interpret
+
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
@@ -19,7 +21,7 @@ def env(tmp_path, monkeypatch):
         "pasta": {"id": "pasta", "name": "Authored spaghetti", "sales_unit": "BAG", "kg_per_sales_unit": "5", "liters_per_sales_unit": None, "pieces_per_sales_unit": "1", "allowed_lot_size": "1", "claims": ["VEGAN", "FREE_FROM_GLUTEN"], "origin_codes": ["246"], "deleted": False, "variable_unit": False, "deposits": []},
         "milk": {"id": "milk", "name": "Authored milk", "sales_unit": "KI", "kg_per_sales_unit": None, "liters_per_sales_unit": "12", "pieces_per_sales_unit": "12", "allowed_lot_size": "1", "claims": ["FREE_FROM_LACTOSE"], "origin_codes": ["246"], "deleted": False, "variable_unit": False, "deposits": []},
     }
-    def search(query, limit=4, dietary=None, origin=None):
+    def search(query, limit=4, dietary=None, origin=None, **criteria):
         return [copy.deepcopy(p) for p in products.values() if query.casefold() in p["name"].casefold() or query in [p["id"], "all"]]
     monkeypatch.setattr(procurement.catalog, "load_catalog", lambda: products)
     monkeypatch.setattr(procurement.product_facts, "search", search)
@@ -85,6 +87,21 @@ def test_complete_cart_confirmation_and_retry(env):
     assert env[1].spent() == spend
 
 
+def test_expired_saved_quote_is_not_reported_ready_and_refresh_recovers(env, monkeypatch):
+    session = create(env)
+    expiry = procurement.policy.parse_time(session["offer"]["expires_at"])
+    with monkeypatch.context() as context:
+        context.setattr(procurement.policy, "now", lambda: expiry + timedelta(seconds=1))
+        response = env[0].get(procurement.PREFIX + "/" + session["id"])
+        assert response.status_code == 200
+        assert response.json()["order_status"] == "NEEDS_CLARIFICATION"
+        assert not response.json()["can_confirm"]
+        assert "expired" in response.json()["assistant_message"]
+        assert response.json()["version"] == session["version"]
+    refreshed = act(env, session, "quote")
+    assert refreshed.status_code == 200 and refreshed.json()["can_confirm"]
+
+
 def test_consolidation_before_pack_rounding_and_stock_allocation(env):
     env[2]["items"] = [{"query": "pasta", "quantity": "3", "unit": "kg", "dietary": []}, {"query": "spaghetti", "quantity": "2", "unit": "kg", "dietary": []}]
     s = create(env)
@@ -97,7 +114,9 @@ def test_hard_budget_cannot_be_approved_and_correction_preserves_selection(env):
     s = create(env, budget="0.01")
     assert not s["can_confirm"] and s["offer"] is None
     assert any("hard budget" in q["prompt"] for q in s["clarification_questions"])
-    fixed = act(env, s, "set_budget", budget="1000")
+    resolution = next(o for q in s["clarification_questions"] for o in q["options"] if o["action"] == "set_budget")
+    assert resolution["payload"]["budget"] == s["cart"]["subtotal"]
+    fixed = act(env, s, resolution["action"], **resolution["payload"])
     assert fixed.status_code == 200, fixed.text
     fixed = fixed.json()
     assert fixed["can_confirm"]
@@ -349,3 +368,129 @@ def test_actual_meal_planner_api_bridges_saved_custom_grams(tmp_path, monkeypatc
     assert result["source_meal_plan"]["cohorts"] == plan["cohorts"]
     assert result["recipe_review_required"] and not result["can_confirm"]
     assert store.spent() == 0
+
+
+def test_quote_checks_available_fifth_product_before_claiming_cannot_fulfill(env, monkeypatch):
+    for i in range(5):
+        env[3][f"milk{i}"] = copy.deepcopy(env[3]["milk"]) | {"id": f"milk{i}", "name": f"Authored milk {i}"}
+    env[2]["items"] = [{"query": "milk", "quantity": "20", "unit": "L", "dietary": ["lactose_free"]}]
+    looked_up = []
+    real = procurement.fixture_lookup
+    def stock(*args):
+        looked_up.extend(args[2])
+        evidence = real(*args)
+        for row in evidence["availability"]["products"]:
+            row["scheduleLines"][0]["availableAmount"] = 100 if row["productId"] == "milk4" else 0
+        return evidence
+    monkeypatch.setattr(procurement, "fixture_lookup", stock)
+    s = create(env)
+    assert "milk4" in looked_up and s["order_status"] == "READY_TO_ORDER"
+    assert s["lines"][0]["selected_product_id"] == "milk4"
+    assert len(s["lines"][0]["candidates"]) == 6
+
+
+def test_semantic_replacement_requires_explicit_selection_even_when_cheapest(env):
+    env[2]["items"] = [{"query": "milk alternative", "retrieval_queries": ["milk"], "quantity": "20", "unit": "L", "dietary": ["lactose_free"]}]
+    s = create(env)
+    assert s["lines"][0]["selected_product_id"] is None and not s["can_confirm"]
+    c = s["lines"][0]["candidates"][0]
+    assert c["match_method"] == "semantic_expansion" and c["requires_explicit_choice"]
+    chosen = act(env, s, "select_product", line_id=s["lines"][0]["id"], product_id=c["id"]).json()
+    assert chosen["can_confirm"] and not chosen["lines"][0]["candidates"][0]["requires_explicit_choice"]
+
+
+def test_brand_organic_hard_rules_and_soft_preference_ranking(env):
+    env[3]["milk"]["brand"] = "Arla"
+    env[3]["milk"]["origin_codes"] = ["752"]
+    env[3]["milk2"] = copy.deepcopy(env[3]["milk"]) | {"id": "milk2", "name": "Authored milk alternative", "brand": "Valio", "origin_codes": ["246"], "organic": True, "organic_evidence": ["EU_ORGANIC_FARMING"]}
+    env[2].update(preference="balanced", items=[{"query": "milk", "quantity": "20", "unit": "L", "dietary": ["lactose_free"], "preferred_brand": "Valio", "preferred_origin": "finland", "preferred_organic": True}])
+    s = create(env)
+    assert s["lines"][0]["selected_product_id"] == "milk2"
+    assert s["lines"][0]["preferred_brand"] == "Valio" and s["can_confirm"]
+    env[2]["items"][0].update(required_brand="Valio", require_organic=True)
+    hard = create(env)
+    assert hard["lines"][0]["selected_product_id"] == "milk2"
+    rejected = next(c for c in hard["lines"][0]["candidates"] if c["id"] == "milk")
+    assert "BRAND_CONFLICT" in rejected["issue_codes"] and "ORGANIC_EVIDENCE_UNKNOWN" in rejected["issue_codes"]
+    env[3]["milk2"]["brand"] = "Changed brand"
+    assert confirm(env, hard).status_code == 409
+    assert env[1].spent() == 0
+
+
+def test_quality_keeps_product_choice_manual_and_stock_has_precise_codes(env, monkeypatch):
+    env[2]["preference"] = "quality"
+    s = create(env)
+    assert s["lines"][0]["selected_product_id"] is None and not s["can_confirm"]
+    assert s["lines"][0]["candidates"][0]["comparison_delta"] is None
+    real = procurement.fixture_lookup
+    def zero(*args):
+        evidence = real(*args)
+        for row in evidence["availability"]["products"]:
+            row["scheduleLines"][0]["availableAmount"] = 0
+        return evidence
+    monkeypatch.setattr(procurement, "fixture_lookup", zero)
+    s = create(env)
+    assert s["lines"][0]["status"] == "OUT_OF_STOCK"
+    assert "INSUFFICIENT_STOCK" in s["lines"][0]["issue_codes"]
+    assert "CONSTRAINT_CONFLICT" in s["lines"][0]["classifications"]
+
+
+def test_comparison_delta_recomputes_shared_sku_pack_cost_not_naive_line_difference(env, monkeypatch):
+    env[3]["pasta2"] = copy.deepcopy(env[3]["pasta"]) | {"id": "pasta2", "name": "Authored spaghetti pasta alternative"}
+    env[2]["items"] = [{"query": "pasta", "quantity": "3", "unit": "kg", "dietary": []}, {"query": "spaghetti", "quantity": "2", "unit": "kg", "dietary": []}]
+    real = procurement.fixture_lookup
+    def prices(*args):
+        evidence = real(*args)
+        for row in evidence["price"]["products"]:
+            row["catalogPrice"]["valueWithTax"] = 10 if row["productId"] == "pasta" else 6
+        return evidence
+    monkeypatch.setattr(procurement, "fixture_lookup", prices)
+    s = create(env)
+    for line in s["lines"]:
+        s = act(env, s, "select_product", line_id=line["id"], product_id="pasta").json()
+    assert s["cart"]["subtotal"] == "10.00"
+    alternative = next(c for c in s["lines"][0]["candidates"] if c["id"] == "pasta2")
+    assert alternative["line_total"] == "6.00" and alternative["comparison_delta"] == "6.00"
+    assert alternative["price_per_requested_unit"] == "1.2"
+    assert alternative["product_details"]["name"] == "Authored spaghetti pasta alternative"
+    assert "commercial" not in alternative and "product" not in alternative
+
+
+def test_real_parser_cheaper_product_followup_preserves_other_line(env, monkeypatch):
+    monkeypatch.setattr(interpretation, "interpret", REAL_INTERPRET)
+    env[3]["milk2"] = copy.deepcopy(env[3]["milk"]) | {"id": "milk2", "name": "Authored milk alternative"}
+    result = env[0].post(procurement.PREFIX, json={"message": "6 kg of pasta and 20 litres of lactose-free milk by Monday", "mode": "fixture", "use_model": False})
+    assert result.status_code == 200, result.text
+    s = result.json()
+    milk = next(line for line in s["lines"] if line["requested_label"] == "milk")
+    pasta = next(line for line in s["lines"] if line["requested_label"] == "pasta")
+    costly = max(milk["candidates"], key=lambda c: float(c["line_total"]))
+    cheaper = min(milk["candidates"], key=lambda c: float(c["line_total"]))
+    s = act(env, s, "select_product", line_id=milk["id"], product_id=costly["id"]).json()
+    changed = act(env, s, "message", message="Choose cheaper milk")
+    assert changed.status_code == 200, changed.text
+    changed = changed.json()
+    assert next(line for line in changed["lines"] if line["id"] == milk["id"])["selected_product_id"] == cheaper["id"]
+    assert next(line for line in changed["lines"] if line["id"] == pasta["id"])["selected_product_id"] == pasta["selected_product_id"]
+
+
+def test_delivery_conflict_offers_explicit_date_action_then_revalidates(env, monkeypatch):
+    later = str(date.today() + timedelta(days=3))
+    real = procurement.fixture_lookup
+    def delayed(*args):
+        evidence = real(*args)
+        for row in evidence["availability"]["products"]:
+            row["scheduleLines"][0]["availableDate"] = later
+        return evidence
+    monkeypatch.setattr(procurement, "fixture_lookup", delayed)
+    s = create(env)
+    assert s["lines"][0]["status"] == "CONSTRAINT_CONFLICT"
+    assert "DELIVERY_CONFLICT" in s["lines"][0]["issue_codes"]
+    assert s["constraints"]["delivery_date"] != later
+    option = next(o for q in s["clarification_questions"] for o in q["options"] if o["action"] == "set_date")
+    assert option["payload"] == {"date": later}
+    resolved = act(env, s, option["action"], **option["payload"])
+    assert resolved.status_code == 200, resolved.text
+    resolved = resolved.json()
+    assert resolved["constraints"]["delivery_date"] == later and resolved["can_confirm"]
+    assert env[1].spent() == 0

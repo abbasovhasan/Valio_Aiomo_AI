@@ -20,9 +20,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import catalog, policy, upstream, product_facts
 from .config import MANDATE
+from .procurement_contract import ProcurementSessionResponse, ReceiptVerificationResponse
 
 D = Decimal
 PREFIX = "/api/v1/procurement/sessions"
+ITEM_OPTIONS = {"required_brand": None, "preferred_brand": None, "preferred_origin": None, "require_organic": False, "preferred_organic": False, "retrieval_queries": []}
 
 
 class Strict(BaseModel):
@@ -33,6 +35,7 @@ class CreateSession(Strict):
     message: str = Field(min_length=1, max_length=3000)
     mode: Literal["fixture", "live"] = "fixture"
     use_model: bool = False
+    apply_preferences: bool = True
     date: Date | None = None
     budget: Decimal | None = Field(default=None, ge=0, le=1000000, decimal_places=2)
 
@@ -57,6 +60,7 @@ class FromMealPlan(Strict):
     plan_id: str = Field(min_length=1, max_length=80)
     selections: dict[int, str] = Field(default_factory=dict, max_length=24)
     mode: Literal["fixture", "live"] = "fixture"
+    apply_preferences: bool = True
     date: Date | None = None
     budget: Decimal | None = Field(default=None, ge=0, le=1000000, decimal_places=2)
 
@@ -118,7 +122,7 @@ def fixture_lookup(customer, day, ids):
 
 def lookup(session, ids):
     return (upstream.sponsor_lookup if session["mode"] == "live" else fixture_lookup)(
-        session["customer_id"], session["constraints"]["delivery_date"], ids
+        session.get("commercial_customer_id", session["customer_id"]), session["constraints"]["delivery_date"], ids
     )
 
 
@@ -139,11 +143,12 @@ def round_sales_units(product, exact):
 
 
 def base_session(scope, mode, use_model=False):
-    return {"id": policy.uid("procurement"), "version": 1, "buyer_id": scope["buyer_id"], "customer_id": scope["customer_id"], "mode": mode, "use_model": use_model, "created_at": policy.now().isoformat(), "messages": [], "lines": [], "constraints": {"budget": None, "currency": "EUR", "delivery_date": None, "preferences": "balanced"}, "receipt": None, "checkout_pending": False}
+    return {"id": policy.uid("procurement"), "version": 1, "buyer_id": scope["buyer_id"], "customer_id": scope["customer_id"], "commercial_customer_id": scope.get("commercial_customer_id", scope["customer_id"]), "commercial_context": "Reference pricing uses the authorized example supplier customer. Your separate demonstration workspace is not a Valio Aimo customer contract.", "mode": mode, "use_model": use_model, "created_at": policy.now().isoformat(), "messages": [], "lines": [], "constraints": {"budget": None, "currency": "EUR", "delivery_date": None, "preferences": "balanced"}, "receipt": None, "checkout_pending": False}
 
 
 def commercial(product, units, evidence, day):
     issues = []
+    codes = []
     def records(kind):
         payload = evidence.get(kind)
         rows = payload.get("products") if isinstance(payload, dict) else None
@@ -158,20 +163,27 @@ def commercial(product, units, evidence, day):
     if not price or price.get("error", True) or cp.get("currency") != "EUR" or unit_price is None or unit_price < 0:
         unit_price = None
         issues.append("A valid EUR tax-inclusive sales-unit price is unavailable.")
+        codes.append("PRICE_UNKNOWN")
     start, end = policy.parse_time(cp.get("validFrom")), policy.parse_time(cp.get("validTo"))
     if not start or not end or not start <= now <= end or not start.date().isoformat() <= day <= end.date().isoformat():
         issues.append("Price validity does not cover now and the requested delivery date.")
+        codes.append("PRICE_VALIDITY_CONFLICT")
     tax = price.get("tax") if isinstance(price.get("tax"), dict) else {}
     if decimal(tax.get("taxRate")) is None:
         issues.append("Tax information is missing.")
+        codes.append("TAX_UNKNOWN")
     cutoff = policy.parse_time(stock.get("closingTime"))
     if not cutoff or cutoff <= now:
         issues.append("Ordering cutoff is unavailable or passed.")
+        codes.append("CUTOFF_CONFLICT")
     if not stock or stock.get("salesBlock", True):
         issues.append("Supplier sales permission is missing or blocked.")
+        codes.append("SALES_PERMISSION_CONFLICT")
     available = D(0)
     possible_dates = []
     unknown = False
+    known_schedule = False
+    future_dates = []
     schedules = stock.get("scheduleLines")
     for line in schedules if isinstance(schedules, list) else []:
         if not isinstance(line, dict):
@@ -187,6 +199,9 @@ def commercial(product, units, evidence, day):
         if stock.get("logisticModel") == "Terminal" and amount == 999999:
             unknown = True
             continue
+        known_schedule = True
+        if units is not None and amount >= units and when > day:
+            future_dates.append(when)
         if when <= day:
             # Schedule lines are alternatives/snapshots, never assumed additive.
             available = max(available, amount)
@@ -194,21 +209,29 @@ def commercial(product, units, evidence, day):
                 possible_dates.append(when)
     if units is None:
         issues.append("No verified dimensional conversion into sellable packs.")
+        codes.append("QUANTITY_CONVERSION_UNKNOWN")
     elif available < units:
-        issues.append("Available quantity is unknown." if unknown else f"Only {available} {product['sales_unit']} confirmed by {day}; {units} needed.")
+        issues.append("Available quantity is unknown." if unknown or not known_schedule else f"Only {available} {product['sales_unit']} confirmed by {day}; {units} needed.")
+        codes.append("STOCK_UNKNOWN" if unknown or not known_schedule else "INSUFFICIENT_STOCK")
+        if future_dates:
+            issues.append(f"Confirmed quantity is available on {min(future_dates)}, after the requested date.")
+            codes.append("DELIVERY_CONFLICT")
     fetched = policy.parse_time(evidence.get("fetched_at"))
     if not fetched or not -30 <= (now - fetched).total_seconds() <= 300:
         issues.append("Supplier evidence is stale or has no valid timestamp.")
+        codes.append("STALE_EVIDENCE")
     total = unit_price * units if unit_price is not None and units is not None else None
     deadlines = [v for v in [end, cutoff, fetched + timedelta(minutes=5) if fetched else None] if v]
     return {
         "unit_price": money(unit_price) if unit_price is not None else None,
         "price_decimal": str(unit_price) if unit_price is not None else None,
         "line_total": money(total) if total is not None else None,
-        "availability": "available" if units is not None and available >= units else "unknown" if unknown else "insufficient",
+        "availability": "available" if units is not None and available >= units else "unknown" if unknown or not known_schedule else "insufficient",
         "available_sales_units": str(available),
         "delivery_date": min(possible_dates) if possible_dates else None,
+        "next_available_date": min(future_dates) if future_dates else None,
         "issues": issues,
+        "issue_codes": codes,
         "valid_until": min(deadlines).isoformat() if len(deadlines) == 3 else None,
         "evidence": {"source": evidence["source"], "fetched_at": evidence["fetched_at"], "price": price, "availability": stock},
     }
@@ -216,13 +239,14 @@ def commercial(product, units, evidence, day):
 
 def requirements(session):
     return {
-        "items": [{"id": line["id"], "query": line["requested_label"], "quantity": line["quantity"], "unit": line["unit"], "dietary": line["dietary"], "origin": line.get("origin"), "max_unit_price": line.get("max_unit_price")} for line in session["lines"]],
+        "items": [{"id": line["id"], "query": line["requested_label"], "quantity": line["quantity"], "unit": line["unit"], "dietary": line["dietary"], "origin": line.get("origin"), "max_unit_price": line.get("max_unit_price"), **{key: line.get(key, default) for key, default in ITEM_OPTIONS.items()}} for line in session["lines"]],
         "budget": session["constraints"]["budget"],
         "delivery_date": session["constraints"]["delivery_date"],
         "preference": session["constraints"]["preferences"],
         "notes": session.get("interpretation_notes", []),
         "ambiguous_fields": session.get("ambiguities", []),
         "recipe_request": session.get("recipe_request"),
+        "pending_request": session["messages"][-1]["text"] if not session["lines"] and session.get("messages") else None,
     }
 
 
@@ -231,7 +255,7 @@ def interpret_into(session, message):
     previous_recipe = session.get("recipe_request")
     previous_recipe_notes = session.get("recipe_notes", [])
     previous_review_required = session.get("recipe_review_required", False)
-    result = interpret(message, prior=requirements(session) if session["lines"] else None, use_model=session["use_model"])
+    result = interpret(message, prior=requirements(session) if session["lines"] or session.get("messages") else None, use_model=session["use_model"])
     if len(result.get("items", [])) > 24:
         result.setdefault("ambiguous_fields", []).append("This request exceeds the 24-line cart limit. Split it into smaller explicit requests.")
     previous = session["lines"]
@@ -252,6 +276,7 @@ def interpret_into(session, message):
             "dietary": item.get("dietary", []), "origin": item.get("origin"),
             "max_unit_price": item.get("max_unit_price"),
             "selected_product_id": old.get("selected_product_id") if old else None,
+            **{key: copy.deepcopy(item.get(key, old.get(key, default) if old else default)) for key, default in ITEM_OPTIONS.items()},
         }
         if old and old.get("meal_plan_line"):
             line["meal_plan_line"] = copy.deepcopy(old["meal_plan_line"])
@@ -295,6 +320,46 @@ def interpret_into(session, message):
     session["messages"].append({"role": "user", "text": message})
 
 
+def suitability(product, line):
+    return product_facts.suitability(product, line["dietary"], line.get("origin"), line.get("required_brand"), line.get("require_organic", False))
+
+
+def soft_matches(product, line):
+    matches = []
+    if line.get("preferred_brand") and product_facts.brand_matches(product.get("brand"), line["preferred_brand"]):
+        matches.append("preferred declared brand")
+    if line.get("preferred_origin") and not product_facts.suitability(product, [], line["preferred_origin"]):
+        matches.append("preferred declared origin")
+    if line.get("preferred_organic") and product.get("organic") is True:
+        matches.append("preferred explicit organic label")
+    return matches
+
+
+def current_selection_subtotal(lines, replacement=None):
+    """Hypothetical complete basket cost, aggregating shared SKUs exactly first."""
+    groups = {}
+    for line in lines:
+        selected = replacement[1] if replacement and line["id"] == replacement[0] else line.get("selected_product_id")
+        candidate = next((c for c in line["candidates"] if c["id"] == selected), None)
+        if not candidate or candidate["issues"]:
+            return None
+        pack = decimal(candidate.get("pack_quantity"))
+        unit_price = decimal(candidate.get("commercial", {}).get("price_decimal"))
+        if pack is None or pack <= 0 or unit_price is None:
+            return None
+        group = groups.setdefault(selected, {"quantity": Fraction(0), "price": unit_price, "product": candidate["product"]})
+        if group["price"] != unit_price:
+            return None
+        group["quantity"] += Fraction(D(line["quantity"])) / Fraction(pack)
+    total = D(0)
+    for group in groups.values():
+        units = round_sales_units(group["product"], group["quantity"])
+        if units is None:
+            return None
+        total += D(money(units * group["price"]))
+    return total
+
+
 def quote(session, spent):
     session["offer"] = None
     session["receipt"] = None
@@ -317,12 +382,12 @@ def quote(session, spent):
     ids = []
     product_map = {}
     for line in session["lines"]:
-        products = product_facts.search(line["requested_label"], 16, line["dietary"], line.get("origin"))
-        products.sort(key=lambda p: (bool(product_facts.suitability(p, line["dietary"], line.get("origin"))), product_facts.units_for(p, D(line["quantity"]), line["unit"]) is None))
-        products = products[:4]
+        products = product_facts.discover(line["requested_label"], 16, line["dietary"], line.get("origin"), line.get("retrieval_queries", []), line.get("selected_product_id"), line.get("required_brand"), line.get("require_organic", False), line.get("preferred_brand"), line.get("preferred_origin"), line.get("preferred_organic", False))
+        products.sort(key=lambda p: (bool(suitability(p, line)), product_facts.units_for(p, D(line["quantity"]), line["unit"]) is None, -len(soft_matches(p, line))))
         if line.get("selected_product_id") and line["selected_product_id"] not in [p["id"] for p in products]:
             try:
-                products.append(product_facts.normalize(line["selected_product_id"]))
+                selected_product = product_facts.normalize(line["selected_product_id"])
+                products = products[:15] + [dict(selected_product, match_method="lexical", match_reason="Previously customer-reviewed product; retained for fresh checks.")]
             except ValueError:
                 line["selected_product_id"] = None
         product_map[line["id"]] = products
@@ -333,21 +398,35 @@ def quote(session, spent):
         line["candidates"] = []
         for p in product_map[line["id"]]:
             units, pack = item_facts(p, line["quantity"], line["unit"])
-            issues = product_facts.suitability(p, line["dietary"], line.get("origin"))
+            issues = suitability(p, line)
+            issue_codes = []
+            if line["dietary"] and product_facts.suitability(dict(p, deleted=False), line["dietary"]):
+                issue_codes.append("DIETARY_EVIDENCE_CONFLICT")
+            if line.get("origin") and product_facts.suitability(dict(p, deleted=False), [], line["origin"]):
+                issue_codes.append("ORIGIN_CONFLICT")
+            if line.get("required_brand") and not product_facts.brand_matches(p.get("brand"), line["required_brand"]):
+                issue_codes.append("BRAND_CONFLICT")
+            if line.get("require_organic") and p.get("organic") is not True:
+                issue_codes.append("ORGANIC_EVIDENCE_UNKNOWN")
             if units is None:
                 issues.extend(p.get("conversion_issues", []))
             if p.get("deleted"):
                 issues.append("Product is deleted.")
+                issue_codes.append("PRODUCT_DELETED")
             if p.get("variable_unit"):
                 issues.append("Variable-weight commercial charges are unsupported.")
+                issue_codes.append("VARIABLE_WEIGHT_UNSUPPORTED")
             if p.get("deposits"):
                 issues.append("Deposit charges need a supported charge calculation.")
+                issue_codes.append("DEPOSIT_CHARGES_UNKNOWN")
             commercial_facts = commercial(p, units, evidence, day) if evidence else {"issues": ["Set a valid delivery date to obtain a quotation."], "unit_price": None, "line_total": None, "availability": "not_queried", "delivery_date": None}
             issues.extend(commercial_facts["issues"])
+            issue_codes.extend(commercial_facts.get("issue_codes", ["QUOTATION_NOT_REQUESTED"] if evidence is None else []))
             limit = decimal(line.get("max_unit_price"))
             price = decimal(commercial_facts.get("price_decimal"))
             if limit is not None and (price is None or pack is None or pack <= 0 or price / pack > limit):
                 issues.append(f"Price per requested {line['unit']} exceeds the €{limit} limit or is unknown.")
+                issue_codes.append("UNIT_PRICE_LIMIT_CONFLICT")
             line["candidates"].append({
                 "id": p["id"], "name": p["name"], "sales_unit": p["sales_unit"],
                 "pack_quantity": str(pack) if pack is not None else None, "pack_unit": line["unit"],
@@ -357,24 +436,68 @@ def quote(session, spent):
                 "surplus_quantity": str(units * pack - D(line["quantity"])) if units is not None and pack is not None else None,
                 "unit_price": commercial_facts["unit_price"], "line_total": commercial_facts["line_total"],
                 "availability": commercial_facts["availability"], "delivery_date": commercial_facts["delivery_date"],
-                "attributes": {"brand": p.get("brand"), "claims": p.get("claims", []), "origin_codes": p.get("origin_codes", [])},
+                "attributes": {"brand": p.get("brand"), "claims": p.get("claims", []), "origin_codes": p.get("origin_codes", []), "organic": p.get("organic")},
+                "match_method": p.get("match_method", "lexical"), "match_reason": p.get("match_reason", "Catalog name match."),
+                "requires_explicit_choice": p.get("match_method") in ["semantic_expansion", "supplier_substitution"] and p["id"] != line.get("selected_product_id"),
+                "preference_matches": soft_matches(p, line),
+                "price_per_requested_unit": format(price / pack, "f") if price is not None and pack is not None and pack > 0 else None,
+                "comparison_delta": None, "comparison_note": None,
+                "available_sales_units": commercial_facts.get("available_sales_units"),
+                "next_available_date": commercial_facts.get("next_available_date"),
+                "issue_codes": list(dict.fromkeys(issue_codes)),
                 "issues": issues, "source": evidence["source"] if evidence else "local_challenge_catalog", "product": p,
                 "commercial": commercial_facts,
             })
         viable = [c for c in line["candidates"] if not c["issues"]]
+        automatic = [c for c in viable if not c["requires_explicit_choice"]]
         if not line.get("selected_product_id"):
-            if len(viable) == 1:
-                line["selected_product_id"] = viable[0]["id"]
-                line["selection_reason"] = "Only quoted candidate satisfies all verified constraints."
-            elif viable and session["constraints"]["preferences"] == "cheapest":
-                chosen = min(viable, key=lambda c: D(c["line_total"]))
+            if len(automatic) == 1 and session["constraints"]["preferences"] != "quality":
+                line["selected_product_id"] = automatic[0]["id"]
+                line["selection_reason"] = "Only direct catalog candidate satisfies all verified constraints; related replacements require explicit review." if len(viable) > 1 else "Only quoted candidate satisfies all verified constraints."
+            elif automatic and session["constraints"]["preferences"] == "cheapest":
+                chosen = min(automatic, key=lambda c: (D(c["line_total"]), -len(c["preference_matches"])))
                 line["selected_product_id"] = chosen["id"]
                 line["selection_reason"] = "Lowest rounded item subtotal among the quoted compliant candidates."
+            elif automatic and session["constraints"]["preferences"] == "delivery":
+                dated = [c for c in automatic if c.get("delivery_date")]
+                earliest = min((c["delivery_date"] for c in dated), default=None)
+                preferred = [c for c in dated if c["delivery_date"] == earliest]
+                if len(preferred) == 1:
+                    line["selected_product_id"] = preferred[0]["id"]
+                    line["selection_reason"] = "Earliest observed suitable delivery estimate among the quoted direct candidates; not a delivery guarantee."
+            elif automatic and session["constraints"]["preferences"] in {"balanced", "origin"}:
+                def preference_score(candidate):
+                    matches = candidate["preference_matches"]
+                    return len(matches) + (2 if session["constraints"]["preferences"] == "origin" and "preferred declared origin" in matches else 0)
+                best = max(preference_score(c) for c in automatic)
+                preferred = [c for c in automatic if preference_score(c) == best]
+                if best and len(preferred) == 1:
+                    line["selected_product_id"] = preferred[0]["id"]
+                    line["selection_reason"] = "Best declared match for your soft preferences among the quoted compliant candidates."
         selected = next((c for c in line["candidates"] if c["id"] == line.get("selected_product_id")), None)
         line["issues"] = selected["issues"] if selected else ["Choose a suitable product."] if viable else ["No quoted candidate satisfies every requirement."]
-        line["status"] = "EXACT_MATCH" if selected and not selected["issues"] else "CONSTRAINT_CONFLICT" if selected else "AMBIGUOUS_MATCH" if viable else "NOT_FOUND" if not line["candidates"] else "CONSTRAINT_CONFLICT"
+        line["issue_codes"] = list(dict.fromkeys(code for c in ([selected] if selected else line["candidates"]) for code in c["issue_codes"]))
+        out_of_stock = bool(line["candidates"]) and all("INSUFFICIENT_STOCK" in c["issue_codes"] and "DELIVERY_CONFLICT" not in c["issue_codes"] for c in line["candidates"])
+        line["status"] = "EXACT_MATCH" if selected and not selected["issues"] else "NOT_FOUND" if not line["candidates"] else "OUT_OF_STOCK" if out_of_stock else "CONSTRAINT_CONFLICT" if selected else "AMBIGUOUS_MATCH" if viable else "CONSTRAINT_CONFLICT"
+        line["classifications"] = [line["status"]]
+        if len(line["candidates"]) > 1 and line["status"] not in ["EXACT_MATCH", "AMBIGUOUS_MATCH"]:
+            line["classifications"].append("AMBIGUOUS_MATCH")
+        if line["issue_codes"] and line["status"] not in ["CONSTRAINT_CONFLICT", "NOT_FOUND"]:
+            line["classifications"].append("CONSTRAINT_CONFLICT")
         if line["issues"]:
-            questions.append({"id": "choose-" + line["id"], "line_id": line["id"], "prompt": f"Review {line['requested_label']}: " + " ".join(line["issues"]), "options": [{"id": c["id"], "label": c["name"], "action": "select_product", "payload": {"line_id": line["id"], "product_id": c["id"]}} for c in viable]})
+            options = [{"id": c["id"], "label": c["name"], "action": "select_product", "payload": {"line_id": line["id"], "product_id": c["id"]}} for c in viable]
+            later = [c["next_available_date"] for c in line["candidates"] if c.get("next_available_date") and set(c["issue_codes"]).issubset({"DELIVERY_CONFLICT", "INSUFFICIENT_STOCK"})]
+            if later and Date.fromisoformat(min(later)) <= today + timedelta(days=30):
+                options.append({"id": "date-" + line["id"], "label": f"Change the deadline to {min(later)} and recheck the whole basket", "action": "set_date", "payload": {"date": min(later)}})
+            options.append({"id": "remove-" + line["id"], "label": f"Remove {line['requested_label']} from this request", "action": "remove_line", "payload": {"line_id": line["id"]}})
+            questions.append({"id": "choose-" + line["id"], "line_id": line["id"], "prompt": f"Review {line['requested_label']}: " + " ".join(line["issues"]), "options": options})
+    baseline = current_selection_subtotal(session["lines"])
+    for line in session["lines"]:
+        for candidate in line["candidates"]:
+            changed = current_selection_subtotal(session["lines"], (line["id"], candidate["id"])) if baseline is not None else None
+            if changed is not None:
+                candidate["comparison_delta"] = money(changed - baseline)
+                candidate["comparison_note"] = "Change to the complete current item subtotal if this line uses this product; shared SKUs are consolidated before pack rounding. Delivery/service charges excluded."
     # Aggregate requirements by SKU and dimension BEFORE pack rounding. Different
     # dimensions on one SKU are converted to fractions of the same sellable unit.
     grouped = {}
@@ -433,7 +556,10 @@ def quote(session, spent):
         blockers.append("The demonstration purchasing policy has expired.")
         all_valid = False
     for i, text in enumerate(blockers):
-        questions.append({"id": f"constraint-{i}", "line_id": None, "prompt": text, "options": []})
+        options = []
+        if text.startswith("Item subtotal exceeds your hard budget") and baseline is not None:
+            options.append({"id": "raise-item-budget", "label": f"Raise the item budget to €{money(subtotal)}", "action": "set_budget", "payload": {"budget": money(subtotal)}})
+        questions.append({"id": f"constraint-{i}", "line_id": None, "prompt": text, "options": options})
     requires_approval = subtotal > D(snapshot["autonomous_limit"])
     session["approval"] = {"status": "required" if all_valid and requires_approval else "not_required" if all_valid else "blocked", "threshold": snapshot["autonomous_limit"], "approved": False, "policy": snapshot}
     session["cart"] = {"items": cart_items, "subtotal": money(subtotal) if all_priced else None, "total": None, "unknown_charges": ["Delivery and service charges are outside this item-price simulation; no final commercial charge is quoted."], "budget_remaining": money(remaining) if remaining is not None else None, "currency": "EUR", "price_scope": "tax-inclusive item subtotal"}
@@ -468,23 +594,28 @@ def register_routes(app, db, buyer, approver, identity, limit):
         result = copy.deepcopy(session)
         for line in result["lines"]:
             for candidate in line.get("candidates", []):
+                candidate["product_details"] = {key: candidate.get("product", {}).get(key) for key in ["id", "name", "brand", "manufacturer", "vendor", "category", "ingredients", "allergens", "storage", "temperature_condition", "source", "updated_at", "sales_unit", "base_unit", "base_units_per_sales_unit", "allowed_lot_size", "kg_per_sales_unit", "liters_per_sales_unit", "pieces_per_sales_unit", "conversion_evidence", "conversion_issues", "reliability", "carbon_group_estimate", "organic", "organic_evidence"]}
                 candidate.pop("product", None)
                 candidate.pop("commercial", None)
         if result.get("offer"):
             result["offer"] = {k: result["offer"][k] for k in ["id", "fingerprint", "expires_at", "total", "status", "approved"]}
             if not result.get("receipt") and policy.parse_time(result["offer"]["expires_at"]) <= policy.now():
                 result["can_confirm"] = False
+                result["order_status"] = "NEEDS_CLARIFICATION"
                 result["assistant_message"] = "This quotation expired. Refresh prices and availability before confirming."
         result.pop("pending_key", None)
         return result
 
-    @app.post(PREFIX)
+    @app.post(PREFIX, response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def create(data: CreateSession, scope=Depends(buyer)):
         limit("procurement-" + scope["buyer_id"], 30)
         if not catalog.load_catalog():
             fail("catalog_missing", "The authorized challenge catalog is required.", 503)
         session = base_session(scope, data.mode, data.use_model)
         interpret_into(session, data.message)
+        if data.apply_preferences:
+            from .preferences import apply_saved
+            apply_saved(session, db, scope, data.message)
         if data.date is not None:
             session["constraints"]["delivery_date"] = data.date.isoformat()
         if data.budget is not None:
@@ -494,7 +625,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
         db.audit(policy.uid("audit"), scope["buyer_id"], "procurement_created", {"session_id": session["id"], "version": 1})
         return public(session)
 
-    @app.post(PREFIX + "/from-meal-plan")
+    @app.post(PREFIX + "/from-meal-plan", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def from_meal_plan(data: FromMealPlan, scope=Depends(buyer)):
         limit("procurement-" + scope["buyer_id"], 30)
         plan = db.get("meal_plan", data.plan_id, scope["buyer_id"])
@@ -509,7 +640,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
             fail("invalid_selection", "A selection refers to a line outside the saved meal plan.", 422)
         request = plan.get("request", {})
         session = base_session(scope, data.mode)
-        session["constraints"].update(delivery_date=data.date.isoformat() if data.date else None, budget=str(data.budget) if data.budget is not None else None, preferences="cheapest" if request.get("priority") == "price" else "balanced")
+        session["constraints"].update(delivery_date=data.date.isoformat() if data.date else None, budget=str(data.budget) if data.budget is not None else None, preferences="cheapest" if request.get("priority") == "price" else "quality" if request.get("priority") == "quality" else "balanced")
         session["interpretation_source"] = "Saved meal plan; exact stored quantities without language-model reconstruction."
         session["recipe_notes"] = [plan.get("recipe_note", "Saved meal recipe requires chef review."), f"Recipe source: {request.get('recipe_source', 'unknown')}. Review the saved grams, yield, product purpose, dietary evidence and separate preparation before accepting this basket."]
         session["interpretation_notes"] = list(session["recipe_notes"])
@@ -541,17 +672,20 @@ def register_routes(app, db, buyer, approver, identity, limit):
             if not meat and (request.get("vegetarian", 0) > 0 or "vegetarian" in source_line.get("ingredient", "").casefold()):
                 dietary.append("vegetarian")
             origin = source_line.get("meat_origin")
-            session["lines"].append({"id": policy.uid("line"), "requested_label": query, "quantity": str(quantity), "unit": "kg", "dietary": dietary, "origin": origin if meat and origin in ["finland", "eu"] else None, "max_unit_price": None, "selected_product_id": pid, "selection_reason": "Selected explicitly in the saved kitchen plan." if pid else None, "meal_plan_line": {"index": index, "ingredient": source_line.get("ingredient"), "servings": source_line.get("servings"), "grams_per_serving": source_line.get("grams_per_serving"), "original_required_kg": str(quantity)}})
+            session["lines"].append({"id": policy.uid("line"), "requested_label": query, "quantity": str(quantity), "unit": "kg", "dietary": dietary, "origin": origin if meat and origin in ["finland", "eu"] else None, "max_unit_price": None, **copy.deepcopy(ITEM_OPTIONS), "selected_product_id": pid, "selection_reason": "Selected explicitly in the saved kitchen plan." if pid else None, "meal_plan_line": {"index": index, "ingredient": source_line.get("ingredient"), "servings": source_line.get("servings"), "grams_per_serving": source_line.get("grams_per_serving"), "original_required_kg": str(quantity)}})
+        if data.apply_preferences:
+            from .preferences import apply_saved
+            apply_saved(session, db, scope, apply_priority=False)
         quote(session, db.spent(scope["buyer_id"]))
         db.save("procurement", session["id"], scope["buyer_id"], session)
         db.audit(policy.uid("audit"), scope["buyer_id"], "meal_plan_quoted", {"plan_id": plan["id"], "session_id": session["id"], "selections": data.selections, "recipe_review_required": True})
         return public(session)
 
-    @app.get(PREFIX + "/{id}")
+    @app.get(PREFIX + "/{id}", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def get(id: str, scope=Depends(identity)):
         return public(load(id, scope))
 
-    @app.get(PREFIX + "/{id}/verify")
+    @app.get(PREFIX + "/{id}/verify", response_model=ReceiptVerificationResponse, response_model_exclude_unset=True)
     def verify(id: str, scope=Depends(identity)):
         session = load(id, scope)
         receipt = session.get("receipt")
@@ -562,7 +696,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
         integrity = hmac.compare_digest(stored["fingerprint"], fingerprint(offer)) and stored["offer_id"] == offer["id"] and stored["items"] == offer["lines"] and stored["total"] == offer["total"]
         return {"receipt_id": stored["id"], "integrity_valid": integrity, "scope_valid": stored["buyer_id"] == scope["buyer_id"] and stored["customer_id"] == scope["customer_id"], "simulated": True, "verification_scope": "Gateway-held receipt consistency and exact basket hash; not an independent signature, supplier order, stock reservation or proof of delivery."}
 
-    @app.post(PREFIX + "/{id}/actions")
+    @app.post(PREFIX + "/{id}/actions", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def action(id: str, data: Action, scope=Depends(buyer)):
         limit("procurement-" + scope["buyer_id"], 60)
         old = load(id, scope)
@@ -596,6 +730,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
                 fail("query_required", "Enter a product or SKU to search for this ingredient.", 422)
             line["requested_label"] = data.query.strip()
             line["selected_product_id"] = None
+            line["retrieval_queries"] = []
             line.pop("selection_reason", None)
         elif data.action == "remove_line":
             session["lines"] = [p for p in session["lines"] if p["id"] != line["id"]]
@@ -603,6 +738,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
             session["constraints"]["budget"] = str(data.budget) if data.budget is not None else None
         elif data.action == "set_date":
             session["constraints"]["delivery_date"] = data.date.isoformat() if data.date else None
+            session["interpretation_notes"] = [note for note in session.get("interpretation_notes", []) if not note.startswith("Interpreted the delivery deadline as ")]
             session["ambiguities"] = [a for a in session.get("ambiguities", []) if "date" not in a.lower() and "delivery" not in a.lower()]
         elif data.action == "acknowledge_recipe":
             session["recipe_review_required"] = False
@@ -612,7 +748,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
         db.audit(policy.uid("audit"), scope["buyer_id"], "procurement_updated", {"session_id": id, "version": session["version"], "action": data.action, "change": data.model_dump(mode="json", exclude_none=True), "offer_fingerprint": (session.get("offer") or {}).get("fingerprint")})
         return public(session)
 
-    @app.post(PREFIX + "/{id}/approve")
+    @app.post(PREFIX + "/{id}/approve", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def approve(id: str, data: Fingerprint, scope=Depends(approver)):
         old = load(id, scope)
         if old.get("receipt") or old.get("checkout_pending"):
@@ -634,7 +770,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
         db.audit(policy.uid("audit"), scope["buyer_id"], "basket_approved", session["offer"]["approval"])
         return public(session)
 
-    @app.post(PREFIX + "/{id}/confirm")
+    @app.post(PREFIX + "/{id}/confirm", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def confirm(id: str, data: Fingerprint, key: str = Header(alias="Idempotency-Key", min_length=8, max_length=128), scope=Depends(buyer)):
         old = load(id, scope)
         offer = old.get("offer")
@@ -663,7 +799,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
             # Current catalog suitability and pack sizes must match the reviewed facts.
             for request_line in old["lines"]:
                 if request_line.get("selected_product_id") == product["id"]:
-                    if product_facts.suitability(product, request_line["dietary"], request_line.get("origin")) or product.get("deleted") or product.get("deposits") or product.get("variable_unit"):
+                    if suitability(product, request_line) or product.get("deleted") or product.get("deposits") or product.get("variable_unit"):
                         fail("catalog_changed", "Product evidence changed. Refresh and review the basket.")
                     old_candidate = next(c for c in request_line["candidates"] if c["id"] == product["id"])
                     _, pack = item_facts(product, request_line["quantity"], request_line["unit"])

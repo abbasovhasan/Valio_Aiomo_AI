@@ -76,7 +76,7 @@ try:
     report["status"] = "passed"
 finally:
     with db.tx() as c:
-        for table in ["aimo_orders", "aimo_audit", "aimo_documents", "aimo_accounts"]:
+        for table in ["aimo_orders", "aimo_audit", "aimo_documents", "aimo_users", "aimo_accounts"]:
             c.execute("DROP TABLE IF EXISTS " + table)
 report["temporary_tables_removed"] = True
 (LOCAL / "postgres-check.json").write_text(json.dumps(report, indent=2))

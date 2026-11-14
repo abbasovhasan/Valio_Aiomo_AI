@@ -165,3 +165,106 @@ def test_raw_ingredients_are_not_replaced_by_prepared_food_with_diet_claims(prod
         assert facts.suitability(results[0], ["gluten_free"])
     # Explicitly requested prepared foods remain discoverable.
     assert facts.search("onion salad")[0]["id"] == "011"
+
+
+def test_declared_brand_and_organic_evidence_remain_separate_from_names(products):
+    rows, _ = products
+    rows["100"]["synkkaData"]["brand"] = "Valio®"
+    rows["100"]["synkkaData"]["names"][0]["value"] = "Organic spaghetti"
+    p = facts.normalize("100")
+    assert p["organic"] is None  # a name is not certification evidence
+    assert facts.suitability(p, required_brand=" valio ") == []
+    assert facts.suitability(p, required_brand="Other")
+    assert facts.suitability(p, require_organic=True)
+    rows["100"]["synkkaData"]["classifications"].append({"name": "packagingMarkedLabel", "values": [{"id": "EU_ORGANIC_FARMING"}]})
+    p = facts.normalize("100")
+    assert p["organic"] is True and p["organic_evidence"] == ["EU_ORGANIC_FARMING"]
+    assert facts.suitability(p, required_brand="Valio", require_organic=True) == []
+
+
+def test_semantic_query_expansion_and_supplier_links_only_return_catalog_ids(products):
+    rows, row = products
+    rows["oat"] = row("oat", "Oat drink", ["VEGAN"], volume=1)
+    result = facts.discover("milk alternative", retrieval_queries=["oat drink"])
+    assert [p["id"] for p in result] == ["oat"]
+    assert result[0]["match_method"] == "semantic_expansion"
+    rows["100"]["substitutions"] = [{"substituteProduct": "200"}, {"substituteProduct": "missing"}]
+    result = facts.discover("100")
+    assert [(p["id"], p["match_method"]) for p in result] == [("100", "exact_sku"), ("200", "supplier_substitution")]
+    rows["100"]["category"] = "12345"
+    assert facts.discover("12345")[0]["match_method"] == "category"
+
+
+def test_required_and_preferred_attributes_rank_before_candidate_limit(products):
+    rows, row = products
+    for i in range(30):
+        p = row(f"brand-{i}", "Milk drink", volume=1, origin="752")
+        p["synkkaData"]["brand"] = "Other"
+        rows[p["id"]] = p
+    wanted = row("late-preferred", "Milk drink", volume=1, origin="246")
+    wanted["synkkaData"]["brand"] = "Valio"
+    wanted["synkkaData"]["classifications"].append({"name": "packagingMarkedLabel", "values": [{"id": "EU_ORGANIC_FARMING"}]})
+    rows[wanted["id"]] = wanted
+    hard = facts.discover("milk", limit=16, required_brand="Valio", require_organic=True)
+    assert hard[0]["id"] == "late-preferred"
+    soft = facts.discover("milk", limit=16, preferred_brand="Valio", preferred_origin="finland", preferred_organic=True)
+    assert soft[0]["id"] == "late-preferred"
+    # A soft preference ranks evidence; it does not forbid other origins/brands.
+    assert any(p["brand"] == "Other" for p in soft)
+
+
+def test_generic_milk_never_silently_becomes_flavoured_sour_or_condensed(products):
+    rows, row = products
+    rows["300"]["synkkaData"]["brand"] = "Other"
+    for pid, variant in [("vanilla", "Vanilla"), ("strawberry", "Strawberry"), ("banana", "Banana"), ("sour", "Sour"), ("condensed", "Condensed")]:
+        rows[pid] = row(pid, f"Valio {variant} milk 1 L", ["FREE_FROM_LACTOSE"], volume=1)
+        rows[pid]["synkkaData"]["brand"] = "Valio"
+    generic = facts.discover("milk", dietary=["lactose_free"], required_brand="Valio")
+    assert [p["id"] for p in generic] == ["300"]
+    assert facts.suitability(generic[0], required_brand="Valio")
+    # A missing plain match stays missing; the strongest available flavour is
+    # never promoted simply because it is the only product with the right brand.
+    del rows["300"]
+    assert facts.search("milk", dietary=["lactose_free"]) == []
+    for variant in ["vanilla", "strawberry", "banana", "sour", "condensed"]:
+        assert [p["id"] for p in facts.search(f"{variant} milk", dietary=["lactose_free"])] == [variant]
+    assert facts.search("vanillamilk")[0]["id"] == "vanilla"
+    assert facts.search("sourmilk")[0]["id"] == "sour"
+
+
+def test_cached_static_text_never_caches_product_facts_or_customer_preferences(products):
+    rows, _ = products
+    assert facts.search("spaghetti", limit=1, dietary=["gluten_free"])[0]["id"] == "200"
+    rows["100"]["synkkaData"]["brand"] = "Valio"
+    rows["200"]["synkkaData"]["brand"] = "Other"
+    rows["100"]["synkkaData"]["classifications"][0]["values"] = [{"id": "FREE_FROM_GLUTEN"}]
+    valio = facts.search("spaghetti", limit=1, dietary=["gluten_free"], preferred_brand="Valio")[0]
+    other = facts.search("spaghetti", limit=1, dietary=["gluten_free"], preferred_brand="Other")[0]
+    assert valio["id"] == "100" and other["id"] == "200"
+    # Neither these fresh constraints nor dimensions participate in the text
+    # cache signature, so this proves normalized facts are not being reused.
+    rows["100"]["synkkaData"]["classifications"][0]["values"] = []
+    rows["100"]["synkkaData"]["unitConversions"][0]["netWeight"]["value"] = 1000
+    refreshed = facts.search("spaghetti", preferred_brand="Valio")
+    updated = next(p for p in refreshed if p["id"] == "100")
+    assert updated["claims"] == [] and updated["kg_per_sales_unit"] == "4"
+    assert facts.suitability(updated, ["gluten_free"])
+
+
+def test_in_place_text_changes_and_catalog_replacement_invalidate_index(products, monkeypatch):
+    rows, row = products
+    assert any(p["id"] == "100" for p in facts.search("spaghetti"))
+    rows["100"]["synkkaData"]["names"][0]["value"] = "Rice noodles"
+    rows["100"]["synkkaData"]["brand"] = "ChefBrand"
+    rows["100"]["category"] = "88884"
+    assert all(p["id"] != "100" for p in facts.search("spaghetti"))
+    for query in ["rice noodles", "ChefBrand", "88884"]:
+        assert facts.search(query)[0]["id"] == "100"
+    rows["100"] = row("100", "Fresh onions")
+    assert facts.search("onion")[0]["id"] == "100"
+    replacement = {"100": row("100", "Sea salt")}
+    monkeypatch.setattr(catalog, "load_catalog", lambda: replacement)
+    assert facts.search("onion") == []
+    assert facts.search("salt")[0]["id"] == "100"
+    monkeypatch.setattr(catalog, "load_catalog", lambda: {})
+    assert facts.search("salt") == []

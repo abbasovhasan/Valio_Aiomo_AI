@@ -111,6 +111,26 @@ class Store:
             c.execute(
                 "CREATE TABLE IF NOT EXISTS aimo_audit (id TEXT PRIMARY KEY, buyer_id TEXT NOT NULL, kind TEXT NOT NULL, body TEXT NOT NULL)"
             )
+            c.execute(
+                "CREATE TABLE IF NOT EXISTS aimo_users (username TEXT PRIMARY KEY, user_id TEXT UNIQUE NOT NULL, buyer_id TEXT UNIQUE NOT NULL, customer_id TEXT UNIQUE NOT NULL, name TEXT NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)"
+            )
+
+    def create_user(self, user):
+        with self.tx() as c:
+            created = c.execute("INSERT INTO aimo_users(username,user_id,buyer_id,customer_id,name,password_hash,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(username) DO NOTHING RETURNING username", tuple(user[key] for key in ["username", "user_id", "buyer_id", "customer_id", "name", "password_hash", "created_at"])).fetchone()
+            if not created:
+                raise StoreError("username_unavailable", "This username is unavailable. Choose another username.")
+            c.execute("INSERT INTO aimo_accounts(buyer_id,spent_cents) VALUES(?,0)", (user["buyer_id"],))
+
+    def user(self, username):
+        with self.tx() as c:
+            row = c.execute("SELECT username,user_id,buyer_id,customer_id,name,password_hash,created_at FROM aimo_users WHERE username=?", (username,)).fetchone()
+            return dict(zip(["username", "user_id", "buyer_id", "customer_id", "name", "password_hash", "created_at"], row)) if row else None
+
+    def user_workspace(self, workspace_id):
+        with self.tx() as c:
+            row = c.execute("SELECT username,buyer_id,customer_id,name FROM aimo_users WHERE buyer_id=?", (workspace_id,)).fetchone()
+            return dict(zip(["username", "buyer_id", "customer_id", "name"], row)) if row else None
 
     def save(self, kind, id, buyer, body):
         with self.tx() as c:

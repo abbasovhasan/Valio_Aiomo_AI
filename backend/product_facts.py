@@ -8,6 +8,7 @@ import re
 import unicodedata
 from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from fractions import Fraction
+from sys import intern
 
 from . import catalog
 
@@ -27,6 +28,9 @@ DIETS = {
     "egg_free": {"FREE_FROM_EGGS"},
     "soy_free": {"FREE_FROM_SOY"},
 }
+ORGANIC_LABELS = {"EU_ORGANIC_FARMING", "SOIL_ASSOCIATION_ORGANIC_SYMBOL"}
+_INDEX_CATALOG = None
+_SEARCH_INDEX = {}
 
 
 def positive(value):
@@ -139,6 +143,8 @@ def normalize(pid):
         "manufacturer": [x.get("name") for x in s.get("producers", []) if x.get("name")],
         "vendor": p.get("vendorName"), "category": p.get("category"),
         "claims": sorted({v["id"] for v in classification(s, "nutritionalClaim") if v.get("id")}),
+        "organic": True if any(v.get("id") in ORGANIC_LABELS for v in classification(s, "packagingMarkedLabel")) else None,
+        "organic_evidence": sorted({v["id"] for v in classification(s, "packagingMarkedLabel") if v.get("id") in ORGANIC_LABELS}),
         "origin_codes": sorted(set(origin)),
         "origin_evidence": "synkkaData.countriesOfOrigin and catalog countryOfOrigin; conflicting records are retained",
         "ingredients": localized(s.get("keyIngredients")),
@@ -161,7 +167,14 @@ def normalize(pid):
     return out
 
 
-def suitability(product, dietary=None, origin=None):
+def brand_matches(actual, requested):
+    """Declared brand equality, never inferred manufacturer/brand-family links."""
+    def clean(value):
+        return re.sub(r"\s+", " ", str(value or "").replace("®", "").replace("™", "")).strip().casefold()
+    return bool(clean(actual)) and clean(actual) == clean(requested)
+
+
+def suitability(product, dietary=None, origin=None, required_brand=None, require_organic=False):
     issues = []
     claims = set(product.get("claims", []))
     for diet in dietary or []:
@@ -179,6 +192,10 @@ def suitability(product, dietary=None, origin=None):
             issues.append(f"Origin is unknown or outside the required region ({origin}).")
     if product.get("deleted"):
         issues.append("Product is deleted from the catalog.")
+    if required_brand and not brand_matches(product.get("brand"), required_brand):
+        issues.append(f"Declared brand is unknown or does not match required brand ({required_brand}).")
+    if require_organic and product.get("organic") is not True:
+        issues.append("No explicit supported organic packaging-label evidence.")
     return issues
 
 
@@ -219,13 +236,57 @@ def units_for(product, quantity, unit):
 def _tokens(text):
     text = unicodedata.normalize("NFKD", str(text).casefold())
     text = "".join(c for c in text if not unicodedata.combining(c))
+    text = re.sub(r"\b(vanilla|strawberry|banana|sour|condensed)milk\b", r"\1 milk", text)
     aliases = {"mince": "minced", "ground": "minced", "tomatoes": "tomato", "tomatos": "tomato", "onions": "onion", "lentils": "lentil", "litres": "l", "liters": "l"}
     return [aliases.get(w, w) for w in re.findall(r"[\w]+", text) if len(w) > 1 or w.isdigit()]
 
 
-def search(query, limit=8, dietary=None, origin=None):
+def _index_for(rows):
+    global _INDEX_CATALOG, _SEARCH_INDEX
+    # Keep only the identity value, not a strong reference to the ~600MiB source
+    # object. Reloading the catalog must be able to release its old records.
+    if _INDEX_CATALOG != id(rows):
+        _INDEX_CATALOG = id(rows)
+        _SEARCH_INDEX = {}
+    return _SEARCH_INDEX
+
+
+def _lexical_record(rows, pid, raw):
+    """Cache only immutable source text/tokens, never facts or buyer criteria.
+
+    Replacing/reloading the catalog invalidates the whole index. A lightweight
+    source signature also detects in-place name/brand/category edits. Prices,
+    stock, claims, package dimensions and preferences are always read afresh.
+    """
+    index = _index_for(rows)
+    source = raw.get("synkkaData", {})
+    names = source.get("names", [])
+    brand_category = str(source.get("brand", "")) + " " + str(raw.get("category", ""))
+    signature = (tuple((name.get("language"), name.get("value", "")) for name in names), brand_category)
+    cached = index.get(pid)
+    if cached is not None and cached[0] == signature:
+        return cached[1]
+    names_text = " ".join(name.get("value", "") for name in names)
+    primary_name = localized(names) or names_text
+    primary_terms = _tokens(primary_name)
+    # Intern source vocabulary only. Customer query text is never interned or
+    # stored in this shared index.
+    fields = (
+        frozenset(intern(term) for term in _tokens(names_text)),
+        frozenset(intern(term) for term in _tokens(brand_category)),
+        primary_name,
+        frozenset(intern(term) for term in primary_terms),
+        len(primary_terms),
+        primary_name.casefold(),
+    )
+    index[pid] = (signature, fields)
+    return fields
+
+
+def search(query, limit=8, dietary=None, origin=None, required_brand=None, require_organic=False, preferred_brand=None, preferred_origin=None, preferred_organic=False):
     """Rank multilingual catalog names, brand and category; verify facts separately."""
     rows = catalog.load_catalog()
+    _index_for(rows)
     query = str(query).strip()
     if query in rows:
         return [normalize(query)]
@@ -237,37 +298,46 @@ def search(query, limit=8, dietary=None, origin=None):
     if not terms:
         return []
     ranked = []
+    query_folded = query.casefold()
+    excluded_name_patterns = [re.compile(r"\b" + re.escape(term) + r"[ -]+free\b|\bfree[ -]+from[ -]+" + re.escape(term) + r"\b", re.I) for term in terms]
     for pid, raw in rows.items():
         if raw.get("deleted"):
             continue
-        s = raw.get("synkkaData", {})
-        names = " ".join(x.get("value", "") for x in s.get("names", []))
-        name_terms = set(_tokens(names))
-        attributes = set(_tokens(str(s.get("brand", "")) + " " + str(raw.get("category", ""))))
+        name_terms, attributes, primary_name, primary_terms, primary_length, primary_folded = _lexical_record(rows, pid, raw)
         if not terms.issubset(name_terms | attributes):
             continue
-        primary_name = localized(s.get("names")) or names
-        primary_terms = _tokens(primary_name)
-        if any(re.search(r"\b" + re.escape(term) + r"[ -]+free\b|\bfree[ -]+from[ -]+" + re.escape(term) + r"\b", primary_name, re.I) for term in terms):
+        if "milk" in terms:
+            # These named variants materially change generic milk's purpose.
+            # Exclude known unrequested variants even if no plain product exists;
+            # a low price, brand match or complete diet claim cannot repair it.
+            variants = {"vanilla", "strawberry", "banana", "sour", "condensed", "evaporated", "fermented", "cultured"}
+            if (primary_terms & variants) - terms:
+                continue
+        if any(pattern.search(primary_name) for pattern in excluded_name_patterns):
             continue
         # A matched ingredient inside a prepared food (salt in chips, butter in
         # croissants, lentils in sauce) is weaker evidence of the requested
         # product's purpose. These are ranking hints, never suitability proof.
         prepared = {"bread", "flour", "flourmix", "cake", "croissant", "chips", "sauce", "patty", "patties", "soup", "pizza", "dressing", "chocolate", "powder", "flavoured", "flavored", "drinkmix", "biscuit", "cookies", "ice", "cream", "cocoa", "spreader", "knife", "bowl", "plate", "burger", "salad", "pastry", "spice", "mix", "meatball", "meatballs", "bolognese", "licorice", "liquorice", "date", "dates", "precooked", "cooked", "brown", "browned", "roasted", "herring", "fish", "candy", "caramel", "macarons", "bouillon", "seasoning", "shaker", "mill", "menage", "dishwash", "diswash", "cleaning", "casserole", "bake", "pancake", "puree", "mash", "juice", "topping", "jellies", "fried", "prefried", "pickled", "ring", "rings", "oat", "sausage", "coldcut", "ketchup", "strips", "chicken", "frankfurter", "ball", "balls", "multipack", "granulated", "nylon", "svr", "jug", "liver", "hartshorn"}
-        penalties = len((set(primary_terms) & prepared) - terms)
-        if not terms.issubset(set(primary_terms) | attributes):
+        penalties = len((primary_terms & prepared) - terms)
+        if not terms.issubset(primary_terms | attributes):
             penalties += 1
         proteins = {"beef", "pork", "chicken", "turkey", "lamb", "salmon", "tuna", "herring"}
         if terms & proteins:
-            penalties += len((set(primary_terms) & proteins) - terms)
+            penalties += len((primary_terms & proteins) - terms)
         # Dried/ground aromatic vegetables materially differ from raw recipe
         # ingredients. Explicitly requested preparation terms remain exempt.
         if "onion" in terms and "minced" not in terms and "minced" in primary_terms:
             penalties += 1
         score = (len(terms & name_terms) * 100
-                 + (15 if query.casefold() in primary_name.casefold() else 0)
-                 - penalties * 60 - len(primary_terms))
+                 + (15 if query_folded in primary_folded else 0)
+                 - penalties * 60 - primary_length)
         ranked.append((score, str(pid)))
+    if _INDEX_CATALOG == id(rows) and len(_SEARCH_INDEX) > len(rows):
+        index = _SEARCH_INDEX
+        for pid in tuple(index):
+            if pid not in rows:
+                index.pop(pid, None)
     # Never truncate before suitability ranking; otherwise the first catalog
     # records can conceal the only explicitly compliant gluten-free variant.
     ranked.sort(key=lambda x: (-x[0], x[1]))
@@ -279,6 +349,60 @@ def search(query, limit=8, dietary=None, origin=None):
         ranked = [(score, pid) for score, pid in ranked if score >= best_score - 45]
     scores = {pid: score for score, pid in ranked}
     normalized = [normalize(pid) for _, pid in ranked]
-    normalized.sort(key=lambda p: (len(suitability(p, dietary, origin)),
-                                   -scores[p["id"]], p["id"]))
+    def preference_count(p):
+        return int(bool(preferred_brand) and brand_matches(p.get("brand"), preferred_brand)) + int(bool(preferred_origin) and not suitability(p, [], preferred_origin)) + int(preferred_organic and p.get("organic") is True)
+    normalized.sort(key=lambda p: (len(suitability(p, dietary, origin, required_brand, require_organic)),
+                                   -preference_count(p), -scores[p["id"]], p["id"]))
     return normalized[:max(1, min(int(limit), 20))]
+
+
+def discover(query, limit=16, dietary=None, origin=None, retrieval_queries=None, selected_product_id=None, required_brand=None, require_organic=False, preferred_brand=None, preferred_origin=None, preferred_organic=False):
+    """Ground semantic query proposals and supplier links in actual catalog IDs.
+
+    An expanded query discovers candidates only. Its provenance stays explicit;
+    the order engine requires customer choice before accepting substitutions.
+    """
+    limit = max(1, min(int(limit), 16))
+    criteria = {"required_brand": required_brand, "require_organic": require_organic, "preferred_brand": preferred_brand, "preferred_origin": preferred_origin, "preferred_organic": preferred_organic}
+    criteria = {key: value for key, value in criteria.items() if value}
+    primary = []
+    for product in search(query, limit, dietary, origin, **criteria):
+        p = dict(product)
+        p["match_method"] = "exact_sku" if str(query).strip() == p["id"] else "category" if str(query).strip() == str(p.get("category")) else "lexical"
+        p["match_reason"] = "Exact supplied product ID." if p["match_method"] == "exact_sku" else "Matching catalog category code." if p["match_method"] == "category" else "Catalog name/brand matches the requested search."
+        primary.append(p)
+    alternatives = []
+    for expansion in list(dict.fromkeys(str(q).strip() for q in retrieval_queries or [] if str(q).strip()))[:3]:
+        if expansion.casefold() == str(query).strip().casefold():
+            continue
+        for product in search(expansion, 8, dietary, origin, **criteria):
+            alternatives.append(dict(product, match_method="semantic_expansion", match_reason=f"Discovered through the proposed related search: {expansion}. Customer suitability review required."))
+    anchors = list(primary)
+    if selected_product_id and not any(p["id"] == selected_product_id for p in anchors):
+        try:
+            anchors.append(normalize(selected_product_id))
+        except ValueError:
+            pass
+    for anchor in anchors:
+        for pid in anchor.get("substitutes", []):
+            try:
+                product = normalize(pid)
+            except ValueError:
+                continue
+            alternatives.append(dict(product, match_method="supplier_substitution", match_reason=f"Catalog supplier substitution link from SKU {anchor['id']}; customer review and all hard checks are still required."))
+    # Reserve discovery capacity without hiding an exact original SKU. Avoid
+    # letting a broad lexical list consume every available alternative slot.
+    ordered = primary[:8] + alternatives + primary[8:] if alternatives else primary
+    result = []
+    seen = set()
+    primary_by_id = {p["id"]: p for p in primary}
+    for product in ordered:
+        if product["id"] in seen:
+            continue
+        # A direct match remains direct even when also returned by an expansion.
+        product = primary_by_id.get(product["id"], product)
+        seen.add(product["id"])
+        result.append(product)
+        if len(result) >= limit:
+            break
+    return result

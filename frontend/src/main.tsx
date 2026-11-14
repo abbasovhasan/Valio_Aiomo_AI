@@ -40,6 +40,8 @@ import type { LucideIcon } from "lucide-react";
 import "./style.css";
 import { MealPlanner } from "./MealPlanner";
 import { ProcurementDesk } from "./ProcurementDesk";
+import { AuthDialog } from "./AuthDialog";
+import type { WorkspaceSession } from "./AuthDialog";
 
 type CheckItem = {
   code: string;
@@ -98,12 +100,7 @@ type Run = {
     tool_calls: any[];
   };
 };
-type Session = {
-  role: string | null;
-  name?: string;
-  buyer_id?: string;
-  customer_id?: string;
-};
+type Session = WorkspaceSession;
 const money = (v: any) =>
   v === null || v === undefined
     ? "Unavailable"
@@ -161,16 +158,20 @@ const scenarios = [
   },
 ];
 async function api(path: string, options: RequestInit = {}) {
+  const headers = new Headers(options.headers);
+  if (!(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   let r = await fetch("/api/v1" + path, {
     ...options,
     credentials: "same-origin",
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers,
   });
   let data = await r.json().catch(() => ({}));
+  if (r.status === 401 && !path.startsWith("/auth/") && path !== "/session") window.dispatchEvent(new Event("aimo-session-expired"));
   if (!r.ok)
     throw new Error(
       typeof data.detail === "string"
         ? data.detail
+        : Array.isArray(data.detail) ? data.detail.slice(0, 3).map((item: any) => `${String(item.loc?.at(-1) || "Input")}: ${item.msg}`).join(". ")
         : data.detail?.message ||
           JSON.stringify(
             data.detail ||
@@ -277,10 +278,7 @@ function MilkPack({
 function App() {
   const [session, setSession] = useState<Session>({ role: null }),
     [workspace, setWorkspace] = useState<any>(null),
-    [authOpen, setAuthOpen] = useState(false),
-    [code, setCode] = useState(""),
-    [authError, setAuthError] = useState(""),
-    [authBusy, setAuthBusy] = useState(false);
+    [authOpen, setAuthOpen] = useState(false);
   const [tab, setTab] = useState("purchase"),
     [mode, setMode] = useState("fixture"),
     [scenario, setScenario] = useState("baseline"),
@@ -298,7 +296,7 @@ function App() {
     [selected, setSelected] = useState<string | null>(null),
     [expanded, setExpanded] = useState<string | null>(null),
     [evidence, setEvidence] = useState<any>(null),
-    [useModel, setUseModel] = useState(true),
+    [useModel, setUseModel] = useState(false),
     [toast, setToast] = useState(""),
     [elapsed, setElapsed] = useState(0),
     [about, setAbout] = useState(false),
@@ -326,6 +324,11 @@ function App() {
       .catch(() => {});
   }, []);
   useEffect(() => {
+    const expire = () => { setSession({ role: null }); setWorkspace(null); setRun(null); setReceipt(null); setQuoteSessionId(null); setAuthOpen(true); setToast("Your session ended. Sign in to reopen your saved cart."); };
+    window.addEventListener("aimo-session-expired", expire);
+    return () => window.removeEventListener("aimo-session-expired", expire);
+  }, []);
+  useEffect(() => {
     if (!busy) return;
     setElapsed(0);
     const t = window.setInterval(() => setElapsed((s) => s + 1), 1000);
@@ -336,30 +339,10 @@ function App() {
     const t = window.setTimeout(() => setToast(""), 3800);
     return () => clearTimeout(t);
   }, [toast]);
-  async function login(e: React.FormEvent) {
-    e.preventDefault();
-    setAuthBusy(true);
-    setAuthError("");
-    try {
-      const s = await api("/session", {
-        method: "POST",
-        body: JSON.stringify({ access_code: code }),
-      });
-      setSession(s);
-      setCode("");
-      setAuthOpen(false);
-      await loadWorkspace();
-      setToast(`Signed in as ${s.name || s.role}`);
-    } catch (e) {
-      setAuthError((e as Error).message);
-    } finally {
-      setAuthBusy(false);
-    }
-  }
   async function logout() {
     await api("/session", { method: "DELETE" });
     setSession({ role: null });
-    setWorkspace(null);
+    setWorkspace(null); setQuoteSessionId(null); setRun(null); setReceipt(null); setSelected(null);
     setToast("Session closed.");
   }
   async function startRun(s = scenario, q = quantity) {
@@ -570,7 +553,7 @@ function App() {
             ["meals", "Meal planner"],
             ["recorder", "Decision recorder"],
             ["gateway", "Gateway API"],
-          ].map(([id, label]) => (
+          ].filter(([id]) => session.demo_workspace !== false || !["desk", "recorder"].includes(id)).map(([id, label]) => (
             <button
               key={id}
               onClick={() => {
@@ -598,7 +581,7 @@ function App() {
               {session.name || "Open your desk"}
               <small>
                 {session.role
-                  ? `${session.role} · example identity`
+                  ? `${session.role} · ${session.demo_workspace === false ? "private workspace" : "shared demo"}`
                   : "Private demo access"}
               </small>
             </span>
@@ -637,7 +620,7 @@ function App() {
         <div className="context-strip">
           <div>
             <span className="hotel-symbol">A</span>
-            <strong>Aurora Hotel</strong>
+            <strong>{session.demo_workspace === false ? session.workspace_name || session.name : "Aurora Hotel"}</strong>
             <span className="context-dot">·</span>
             <span>Example purchasing mandate</span>
           </div>
@@ -674,10 +657,11 @@ function App() {
           </div>
         )}
         <div hidden={tab !== "purchase"}>
-          <ProcurementDesk api={api} role={session.role} onSignIn={() => setAuthOpen(true)} onUpdated={loadWorkspace} initialSessionId={quoteSessionId} />
+          <ProcurementDesk key={session.buyer_id || "anonymous"} buyerId={session.buyer_id} api={api} role={session.role} active={tab === "purchase" && !authOpen} onSignIn={() => setAuthOpen(true)} onUpdated={loadWorkspace} initialSessionId={quoteSessionId} />
         </div>
         <div hidden={tab !== "meals"}>
           <MealPlanner
+            key={session.buyer_id || "anonymous"}
             onQuoteSession={(id) => { setQuoteSessionId(id); setTab("purchase"); }}
             api={api}
             role={session.role}
@@ -784,7 +768,7 @@ function App() {
                       checked={useModel}
                       onChange={(e) => setUseModel(e.target.checked)}
                     />
-                    <Zap size={13} /> Use NVIDIA Nemotron agent
+                    <Zap size={13} /> Use NVIDIA for nonconfidential demo content
                   </label>
                 )}
               </section>
@@ -1601,96 +1585,10 @@ function App() {
           </span>
         </div>
       </footer>
-      {authOpen && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setAuthOpen(false);
-          }}
-        >
-          <section
-            className="auth-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="auth-title"
-          >
-            <button
-              className="modal-close icon-button"
-              onClick={() => setAuthOpen(false)}
-              aria-label="Close sign-in"
-            >
-              <X size={20} />
-            </button>
-            <span className="modal-icon">
-              <KeyRound size={25} />
-            </span>
-            <div className="eyebrow">AUTHORITY STARTS WITH IDENTITY</div>
-            <h2 id="auth-title">Your place at the desk.</h2>
-            <p>
-              Use a buyer or approver access code from this installation. Each
-              code maps to an identity on the server.
-            </p>
-            {session.role && (
-              <div className="current-session">
-                <span className="avatar">
-                  {session.role === "approver" ? "LK" : "AB"}
-                </span>
-                <div>
-                  <strong>{session.name}</strong>
-                  <small>{session.role} · example identity</small>
-                </div>
-                <button
-                  className="text-button"
-                  onClick={() => {
-                    logout();
-                    setAuthOpen(false);
-                  }}
-                >
-                  <LogOut size={15} /> Sign out
-                </button>
-              </div>
-            )}
-            <form onSubmit={login}>
-              <label htmlFor="access-code">ACCESS CODE</label>
-              <input
-                autoFocus
-                id="access-code"
-                type="password"
-                autoComplete="off"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="Enter your private demo code"
-                required
-              />
-              {authError && (
-                <div className="form-error" role="alert">
-                  {authError}
-                </div>
-              )}
-              <button
-                className="primary-button"
-                type="submit"
-                disabled={authBusy || !code}
-              >
-                {authBusy ? (
-                  <LoaderCircle size={17} className="spin" />
-                ) : (
-                  "Open this session"
-                )}
-                <ArrowRight size={17} />
-              </button>
-            </form>
-            <div className="auth-help">
-              <LockKeyhole size={14} />
-              <p>
-                Local setup stores generated codes in{" "}
-                <code>.local/access.json</code>. Switching a UI control never
-                grants approval rights.
-              </p>
-            </div>
-          </section>
-        </div>
-      )}
+      {authOpen && <AuthDialog api={api} session={session} onClose={() => setAuthOpen(false)} onLogout={logout} onSignedIn={async (next) => {
+        setSession(next); setQuoteSessionId(null); setRun(null); setReceipt(null); setSelected(null); setTab("purchase");
+        keys.current = {}; await loadWorkspace(); setToast(`Signed in as ${next.name || next.role}`);
+      }} />}
       {evidence && (
         <div
           className="modal-backdrop"

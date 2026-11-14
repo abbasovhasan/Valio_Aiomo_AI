@@ -1,10 +1,8 @@
 """Aimo Rewind: versioned external buyer gateway and simulated commitment API."""
 
-import hashlib
 import hmac
 import json
 import os
-import secrets
 import threading
 import time
 from collections import defaultdict
@@ -15,18 +13,17 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 from fastapi import FastAPI, Depends, HTTPException, Request, Response, Header
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from pydantic import BaseModel, ConfigDict, Field
 from . import catalog, policy, upstream, planning
 from .config import ROOT, BUYER, CUSTOMER, MANDATE, APPROVER, access_codes, MODEL
 from .store import Store, StoreError
+from .auth import Auth, CodeLogin as Login, PasswordLogin, Registration
 
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-
-class Login(Strict):
-    access_code: str = Field(min_length=1, max_length=200)
 
 
 class RunInput(Strict):
@@ -53,8 +50,8 @@ class ApprovalInput(Strict):
 def create_app(store=None):
     db = store or Store()
     app = FastAPI(
-        title="Aimo Rewind · Trusted Trade Gateway",
-        version="1.0.0",
+        title="A4TB · Valio Aimo · Trusted Trade Gateway",
+        version="1.1.0",
         description="External buyer-agent API with server-enforced synthetic authority. Valio price/availability are sandbox reads. Orders are ALWAYS our simulator, never sponsor orders. Fixture mode is explicit. No stock reservation or real purchase occurs.",
     )
     app.state.store = db
@@ -66,13 +63,13 @@ def create_app(store=None):
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=()"
+            "camera=(), microphone=(self), geolocation=()"
         )
         if request.url.path.startswith("/api/") or request.url.path == "/health":
             response.headers["Cache-Control"] = "no-store"
         elif not request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
             response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
             )
         return response
 
@@ -93,42 +90,10 @@ def create_app(store=None):
                 )
             attempts[key].append(at)
 
-    def identity(request: Request):
-        bearer = request.headers.get("Authorization", "")
-        token = (
-            bearer[7:]
-            if bearer.startswith("Bearer ")
-            else request.cookies.get("aimo_session", "")
-        )
-        s = db.get("session", hashlib.sha256(token.encode()).hexdigest(), BUYER) if token else None
-        if not s or s["expires"] < time.time():
-            raise HTTPException(
-                401,
-                detail={
-                    "code": "authentication_required",
-                    "message": "Use a server-issued buyer or approver access code.",
-                },
-            )
-        # Mutations accept only same-origin browser requests, plus nonbrowser API clients.
-        origin = request.headers.get("origin")
-        if request.method not in ["GET", "HEAD", "OPTIONS"] and origin:
-            from urllib.parse import urlparse
+    auth = Auth(db, limit)
 
-            parsed = urlparse(origin)
-            forwarded = request.headers.get("x-forwarded-host")
-            host = forwarded or request.headers.get("host")
-            local = parsed.hostname in ["127.0.0.1", "localhost"] and (
-                request.url.hostname in ["127.0.0.1", "localhost"]
-            )
-            if parsed.netloc != host and not local:
-                raise HTTPException(
-                    403,
-                    detail={
-                        "code": "origin_blocked",
-                        "message": "Cross-origin mutation blocked.",
-                    },
-                )
-        return {k: v for k, v in s.items() if k != "expires"}
+    def identity(request: Request):
+        return auth.identity(request)
 
     def buyer(s=Depends(identity)):
         if s["role"] != "buyer":
@@ -217,6 +182,14 @@ def create_app(store=None):
             content={"detail": {"code": exc.code, "message": exc.message}},
         )
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, exc):
+        if request.url.path.startswith("/api/v1/auth/") or request.url.path == "/api/v1/session":
+            # Pydantic's default error body can echo a rejected password/code.
+            errors = [{key: value for key, value in error.items() if key not in ["input", "ctx"]} for error in exc.errors()]
+            return JSONResponse(status_code=422, content={"detail": errors})
+        return await request_validation_exception_handler(request, exc)
+
     @app.get("/health")
     def health():
         return {
@@ -229,42 +202,15 @@ def create_app(store=None):
 
     @app.post("/api/v1/session")
     def login(data: Login, request: Request, response: Response):
-        limit("login-" + (request.client.host if request.client else "unknown"), 20)
-        role = next(
-            (
-                r
-                for r, c in access_codes().items()
-                if hmac.compare_digest(c, data.access_code)
-            ),
-            None,
-        )
-        if not role:
-            raise HTTPException(
-                401,
-                detail={
-                    "code": "invalid_access_code",
-                    "message": "Access code was not recognized.",
-                },
-            )
-        token = secrets.token_urlsafe(40)
-        info = {
-            "role": role,
-            "name": APPROVER if role == "approver" else "Aurora external buyer agent",
-            "buyer_id": BUYER,
-            "customer_id": CUSTOMER,
-            "expires": time.time() + 8 * 3600,
-        }
-        db.save("session", hashlib.sha256(token.encode()).hexdigest(), BUYER, info)
-        response.set_cookie(
-            "aimo_session",
-            token,
-            httponly=True,
-            samesite="strict",
-            secure=request.url.scheme == "https"
-            or os.getenv("AIMO_SECURE_COOKIES") == "1",
-            max_age=8 * 3600,
-        )
-        return {k: v for k, v in info.items() if k != "expires"}
+        return auth.code_login(data, request, response)
+
+    @app.post("/api/v1/auth/register", status_code=201)
+    def register_account(data: Registration, request: Request, response: Response):
+        return auth.register(data, request, response)
+
+    @app.post("/api/v1/auth/login")
+    def password_login(data: PasswordLogin, request: Request, response: Response):
+        return auth.password_login(data, request, response)
 
     @app.get("/api/v1/session")
     def session(request: Request):
@@ -275,21 +221,19 @@ def create_app(store=None):
 
     @app.delete("/api/v1/session")
     def logout(request: Request, response: Response):
-        token = request.cookies.get("aimo_session", "")
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        existing = db.get("session", token_hash, BUYER)
-        if existing:
-            existing["expires"] = 0
-            db.save("session", token_hash, BUYER, existing)
-        response.delete_cookie("aimo_session")
-        return {"signed_out": True}
+        return auth.logout(request, response)
 
     @app.get("/api/v1/workspace")
     def workspace(s=Depends(identity)):
         mandate = dict(MANDATE)
         mandate["spent"] = policy.money(Decimal(db.spent(s["buyer_id"])) / 100)
+        private_workspace = s["buyer_id"] != BUYER
+        if private_workspace:
+            mandate.update(buyer_id=s["buyer_id"], customer_id=s["customer_id"], name=s.get("workspace_name", "Private demonstration workspace"), note="Private simulated purchasing workspace; no real supplier contract is created.")
         return {
             "mandate": mandate,
+            "workspace_id": s.get("workspace_id", s["buyer_id"]),
+            "trust_scenarios_available": not private_workspace,
             "catalog_count": len(catalog.load_catalog()),
             "storage": db.backend,
             "storage_note": db.note,
@@ -358,6 +302,8 @@ def create_app(store=None):
 
     @app.post("/api/v1/runs")
     def run(data: RunInput, s=Depends(buyer)):
+        if s["buyer_id"] != BUYER or s["customer_id"] != CUSTOMER:
+            raise HTTPException(403, detail={"code": "shared_demo_required", "message": "Trust scenarios use the shared Aurora mandate. Use Smart order in your private workspace, or sign in with the shared demonstration buyer code."})
         limit("run-" + s["buyer_id"], 20)
         today = datetime.now(ZoneInfo("Europe/Helsinki")).date()
         if data.date < today or data.date > today + timedelta(days=30):
@@ -817,6 +763,10 @@ def create_app(store=None):
 
     from .procurement import register_routes
     register_routes(app, db, buyer, approver, identity, limit)
+    from .preferences import register_routes as register_preferences
+    register_preferences(app, db, buyer, limit)
+    from .multimodal import register_routes as register_multimodal
+    register_multimodal(app, buyer, limit)
 
     @app.get("/{path:path}", include_in_schema=False)
     def frontend(path: str):

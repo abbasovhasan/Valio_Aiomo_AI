@@ -29,7 +29,7 @@ def access_codes():
     }
 
 
-MODEL = os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b")
+MODEL = os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b")
 BUYER = "buyer-hotel-aurora"
 CUSTOMER = "hotel-aurora-demo"
 APPROVER = "Leena Koski · procurement manager"

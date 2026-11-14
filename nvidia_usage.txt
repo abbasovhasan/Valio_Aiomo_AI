@@ -1,0 +1,146 @@
+A4TB · Valio Aimo — NVIDIA USAGE RECORD
+Reviewed 14 November 2026, Europe/Helsinki
+
+PURPOSE AND CURRENT IMPLEMENTATION
+
+NVIDIA is an optional language/vision proposal service. It never supplies authoritative
+prices, stock, package dimensions, taxes, customer permissions, spending thresholds or
+order totals. The FastAPI gateway validates real catalog/sandbox facts and performs
+all monetary and authorization checks deterministically. Every order is simulated.
+
+Selected opt-in text model: nvidia/nemotron-3.5-lightning-30b-a3b.
+Independent optional vision model: nvidia/nemotron-3.5-super-vl-120b-a12b.
+Configuration: NVIDIA_API_KEY stays server-side; NVIDIA_MODEL selects text and
+NVIDIA_VISION_MODEL selects vision. No key is sent to the frontend or committed.
+
+backend/interpretation.py calls the NVIDIA OpenAI-compatible endpoint
+https://integrate.api.nvidia.com/v1/chat/completions using the extract_order tool.
+A typed Intent permits product/quantity/unit/constraint/preferences and bounded related
+search proposals. Pydantic validation, retained hard requirements and catalog checks
+prevent a model proposal from becoming financial authority. Invalid output/provider
+failures are visible and preserve the saved cart. The supported recipe exemplar routes
+to the labelled deterministic planner rather than pretending the model authored it.
+
+backend/model_providers.py and backend/multimodal.py use one bounded
+extract_input_text tool for optional image OCR. JPEG/PNG input is decoded, bounded,
+metadata-stripped and reencoded before the selected vision call. The result is editable
+text plus uncertainties, source and timing; no cart is created by extraction. The
+customer must review/add text and then separately request a basket. Uploaded files and
+extracted text are not persisted by these input endpoints.
+
+Default OCR is LOCAL Tesseract (English/Finnish). Default audio transcription is LOCAL
+pretrained Whisper base, CTranslate2 CPU int8. They do not invoke NVIDIA or send media
+to another AI provider. An actual NVIDIA Riva Parakeet CTC 1.1B test succeeded for a
+synthetic clip, but that hosted ASR was not selected or added as a runtime dependency.
+
+The retained original outside-agent script uses typed candidate proposals through the
+same versioned gateway. Its earlier real Super-VL/Aiven/Valio execution is historical
+proof, not a claim that every later selected model was retested in that whole flow.
+Remote NVIDIA inference is provider-hosted GPU computation. We did not deploy a GPU,
+run CUDA locally, train/fine-tune a model or perform an NVIDIA GPU-hosting experiment.
+
+ACTUALLY EXECUTED EVALUATION
+
+scripts/benchmark_ai.py evaluated authored basic extraction, a multi-product budget,
+recipe ambiguity, missing quantity, multi-turn preservation, schema/authority injection
+and a Finnish request, plus a printed-list image and synthetic spoken purchasing clip.
+The benchmark used no customer/private data or ambient microphone recording.
+
+Initial seven-case pipeline results (one sample each, not a general quality ranking):
+- Local parser: 7/7 schema-valid, 5/7 full-case checks; median 752 ms; no provider tokens.
+- Nemotron 3.5 Super VL: 4/7 valid/complete cases; median 9,693 ms; slowest 43,328 ms;
+  six actual text-provider calls, 16,330 reported text tokens.
+- Nemotron 3.5 Lightning: 7/7 valid/complete cases; median 7,864 ms; slowest 19,344 ms;
+  six actual text-provider calls, 15,749 reported text tokens.
+Each NVIDIA strategy routed the bolognese case locally, so seven pipeline cases were
+not seven neural-model calls. Schema-invalid responses received no extraction credit.
+Actual node/quantity/category facts still came from deterministic catalog validation.
+
+Final selected-model/local rerun: .local/ai-benchmark-final.json.
+- Lightning: 7/7 valid/full cases, 18/18 checks, median 6,119 ms, max 10,680 ms,
+  six actual provider calls, 15,187 reported tokens.
+- Local parser: 7/7 valid, 6/7 full cases, 15/18 checks, median 147 ms, max 2,747 ms;
+  Finnish remains unsupported locally. Both check correct next Monday.
+The initial report .local/ai-benchmark.json is preserved for before/after evidence.
+Actual procurement API check first asked for the missing milk quantity, then accepted
+"20 litres" while retaining milk and Monday. No order or synthetic spend was created.
+The separate ignored evidence is .local/ai-pending-context-final.json.
+
+Media rerun (.local/ai-benchmark-media.json):
+- Local Tesseract: printed English list, normalized WER 0, 160 ms,zero provider calls.
+- Local Whisper base: authored 4.86-second clip, normalized WER 0, 1,767 ms,zero provider calls.
+- Optional Super VL image: same list, normalized WER 0, 2,254 ms,one provider call,
+  1,088 prompt + 168 completion = 1,256 reported tokens.
+A prior cloud-OCR probe also succeeded in 2,290 ms with 1,155 reported tokens; another took
+10,335 ms. These samples establish variability, not a latency guarantee. Tiny Whisper
+misheard "butter" on the clip and was replaced by base. NVIDIA Riva ASR transcribed the
+same clip correctly in 9,830 ms, but local base was selected for privacy/responsiveness.
+Word metrics normalize spelling, number words and equivalent units. Separately, the
+owner confirmed correct real microphone/accent transcription on the public website.
+That single qualitative check is not a measured accent corpus and does not establish
+accuracy for noisy speech, handwriting, Finnish audio or multilingual images.
+
+DEPLOYED RELEASE EVIDENCE
+
+The release coordinator recorded 171 passing backend tests and a passing frontend
+production build. The public release serving index-C67pl32K.js passed 47 extended
+checks through https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site. Actual selected
+Lightning interpretation extracted both products and actual Valio sandbox quotations
+produced a ready cart; that live cart was not committed. Separate fixture-backed
+orders tested private-workspace manager approval, simulation, idempotent retry,
+receipt verification and recovery. No real supplier commitment occurred.
+
+Actual hosted default OCR returned the authored milk/butter text in 444 ms and default
+local Whisper base returned it in 1,800 ms (server-reported extraction time). Complete
+HTTP calls took 901 ms and 2,651 ms respectively. These media checks used no NVIDIA
+request. Missing cloud consent and cross-origin uploads were rejected; extraction did
+not mutate the saved cart or receipt. Local browser checks also covered editable
+image/audio previews. The owner's microphone confirmation is separate from the
+authored benchmark, and no private recording/transcript is included in this record.
+
+Ignored evidence: .local/extended-deployed-report.json and
+.local/extended-migration-report.json. The latter records recovery of an old receipt
+after deployment and unchanged shared demonstration spending. Current final browser
+and private-source handoff status is maintained in docs/ACCEPTANCE_RECORD.md.
+
+Current authenticated /v1/models catalog access succeeded. A Gemma 3 27B probe returned
+HTTP 410; a current Gemma 4 31B forced-tool probe did not satisfy this application's
+interface. We do not infer general model quality from that interface result. Gemini
+was researched through official docs but has no configured runtime key/verified quota;
+no measured Gemini result is claimed.
+
+COST AND RESOURCE OBSERVATIONS
+
+No NVIDIA account-wide remaining quota, per-request dollar price or final bill was
+exposed by these inference responses. Token/latency figures are observations, not an
+invented USD charge or claim of unlimited free use. There was no credit purchase,
+paid subscription, payment card or personal financial transaction.
+
+Modal hosts CPU FastAPI/private volumes under the existing verified Junction grant
+and spending cap; it does not host these large NVIDIA models. Actual local complete
+app+catalog+OCR+Whisper base peak RSS 882.4 MiB motivated 1 CPU / 1,536 MiB headroom.
+The deployed media observations above are not a concurrency or latency guarantee.
+The old rounded Modal usage snapshot $0.01 USD is not a current NVIDIA usage balance.
+
+PRIVACY, LIMITATIONS AND IMPROVEMENT
+
+NVIDIA trial APIs are used only for nonconfidential challenge/evaluation content.
+Text interpretation and cloud vision are optional; local text/OCR/audio are defaults.
+The official trial terms restrict confidential/sensitive/personal inputs unless
+expressly permitted and describe logging/data use. Cloud image extraction requires
+explicit provider selection and cloud_consent=true before the body is read. The local
+media paths are the default. No registration identity/credential is sent to media AI.
+Production/confidential use requires appropriate provider terms or a validated local
+model; we did not activate a paid production subscription.
+
+Selected trial terms:
+https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf
+Selected vision disclosure:
+https://build.nvidia.com/nvidia/nemotron-3.5-super-vl-120b-a12b/playground
+Official model research, access inventory, benchmark definitions, pinned speech model
+LICENSE/reproduction and limitations: docs/AI_MODEL_SELECTION.md.
+
+Potential improvements are representative consented speech/image evaluation, measured
+error/latency distributions, stronger provider schema conformance and appropriate
+privacy coverage. No fine-tuning is justified by this small evaluation set. Model
+outputs cannot waive hard requirements or create a real order, invoice or payment.

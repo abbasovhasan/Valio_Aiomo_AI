@@ -36,6 +36,9 @@ class CatalogProductResponse(ProductDetailsResponse):
     quantity_sales_units: PositiveText | None
     effective_quantity: PositiveText | None
     surplus_quantity: NonnegativeText | None
+    available_sales_units: NonnegativeText | None = None
+    price_per_kg: NonnegativeText | None = None
+    price_per_litre: NonnegativeText | None = None
     availability: Literal['available', 'unknown', 'insufficient', 'not_queried']
     delivery_date: DateText | None
     source: str
@@ -57,6 +60,30 @@ class SearchResponse(BaseModel):
     applied_filters: dict
     source: str
     quote_error: str | None
+    sort_scope: Literal['full_filtered_catalog', 'quoted_page']
+    sort_basis: str
+
+
+SearchSort = Literal['relevance', 'name_asc', 'name_desc', 'price_asc', 'price_desc',
+                     'price_kg_asc', 'price_kg_desc', 'price_l_asc', 'price_l_desc', 'delivery_asc']
+
+
+def sort_quoted_page(products, sort):
+    """Order only bounded supplier evidence; unknowns stay last in either order.
+
+    The source dataset contains no prices. Sorting a quoted page must never be
+    presented as a lowest/highest price search over the complete catalog.
+    """
+    field = {'price_asc': 'unit_price', 'price_desc': 'unit_price',
+             'price_kg_asc': 'price_per_kg', 'price_kg_desc': 'price_per_kg',
+             'price_l_asc': 'price_per_litre', 'price_l_desc': 'price_per_litre',
+             'delivery_asc': 'delivery_date'}.get(sort)
+    if not field:
+        return products
+    known = [p for p in products if p.get(field) is not None]
+    unknown = [p for p in products if p.get(field) is None]
+    key = (lambda p: (p[field], p['id'])) if field == 'delivery_date' else (lambda p: (Decimal(p[field]), p['id']))
+    return sorted(known, key=key, reverse=sort.endswith('_desc')) + unknown
 
 
 def register_routes(app, db, identity, limit):
@@ -73,6 +100,7 @@ def register_routes(app, db, identity, limit):
         dietary: list[DietaryRestriction] = Query(default=[]),
         organic: bool = False,
         apply_preferences: bool = True,
+        sort: SearchSort = 'relevance',
         date: Date | None = None,
         quantity: Decimal = Query(default=Decimal(1), gt=0, le=1000000, decimal_places=3),
         unit: Unit = 'packages',
@@ -95,7 +123,7 @@ def register_routes(app, db, identity, limit):
             preferred_brand=saved['preferred_brand'] if apply_preferences else None,
             preferred_origin=saved['preferred_origin'] if apply_preferences else None,
             preferred_organic=saved['preferred_organic'] if apply_preferences else False,
-            excluded_ingredients=exclusions)
+            excluded_ingredients=exclusions, sort=sort)
         day = date.isoformat() if date else None
         evidence, quote_error = None, None
         if day and result['products']:
@@ -122,11 +150,20 @@ def register_routes(app, db, identity, limit):
                 'requested_quantity': format(quantity, 'f'), 'quantity_sales_units': format(units, 'f') if units is not None else None,
                 'effective_quantity': format(units * capacity, 'f') if units is not None and capacity is not None else None,
                 'surplus_quantity': format(units * capacity - quantity, 'f') if units is not None and capacity is not None else None,
+                'available_sales_units': quote.get('available_sales_units'),
+                **facts.comparable_prices(p, quote.get('price_decimal')),
                 'availability': quote['availability'], 'delivery_date': quote['delivery_date'],
                 'source': evidence['source'] if evidence else 'local_challenge_catalog',
                 'lactose_free': True if 'FREE_FROM_LACTOSE' in p['claims'] else None,
                 'contains_milk': True if any(v.get('id') == 'AM' and v.get('unit') == 'CONTAINS' for v in p['allergens']) else None})
-        return {**result, 'products': products, 'source': 'local restricted challenge catalog',
+        page_sort = sort not in {'relevance', 'name_asc', 'name_desc'}
+        basis = ('Estimated available date' if sort == 'delivery_asc' else
+                 'EUR per verified kg' if sort.startswith('price_kg_') else
+                 'EUR per verified litre' if sort.startswith('price_l_') else
+                 'EUR per supplier sales unit (package or kg)' if page_sort else
+                 'Product name' if sort.startswith('name_') else 'Catalog match and explicit saved preferences')
+        return {**result, 'products': sort_quoted_page(products, sort), 'source': 'local restricted challenge catalog',
+            'sort_scope': 'quoted_page' if page_sort else 'full_filtered_catalog', 'sort_basis': basis,
             'applied_filters': {'q': q, 'category': category, 'brand': brand, 'origin': origin, 'organic': organic,
-                'dietary': restrictions, 'excluded_ingredients': exclusions, 'soft_preferences': apply_preferences},
+                'dietary': restrictions, 'excluded_ingredients': exclusions, 'soft_preferences': apply_preferences, 'sort': sort},
             'quote_error': quote_error}

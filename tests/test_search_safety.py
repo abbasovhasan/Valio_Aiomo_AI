@@ -105,6 +105,50 @@ def test_generic_ingredient_never_silently_chooses_a_cheaper_prepared_variant(en
     assert chosen.json()['lines'][0]['selected_product_id'] == prepared
 
 
+@pytest.mark.parametrize('query,ordinary_name,other_name', [
+    ('butter', 'Unsalted butter', 'Butter beans'),
+    ('butter', 'Unsalted butter', 'Butterbeans'),
+    ('butter', 'Unsalted butter', 'Butter buns'),
+    ('flour', 'Wheat flour', 'Flour scoop'),
+])
+def test_cheapest_ingredient_does_not_auto_select_a_different_product_purpose(env, monkeypatch, query, ordinary_name, other_name):
+    env[2]['ordinary'] = product('ordinary', ordinary_name)
+    env[2]['other-purpose'] = product('other-purpose', other_name)
+    original_lookup = procurement.fixture_lookup
+
+    def prices(*args):
+        evidence = original_lookup(*args)
+        for row in evidence['price']['products']:
+            row['catalogPrice']['valueWithTax'] = 10 if str(row['productId']) == 'ordinary' else .10
+        return evidence
+
+    monkeypatch.setattr(procurement, 'fixture_lookup', prices)
+    session = create(env, f'5 kg {query}. Choose cheapest.')
+    line = session['lines'][0]
+    assert line['selected_product_id'] == 'ordinary'
+    other = next(candidate for candidate in line['candidates'] if candidate['id'] == 'other-purpose')
+    assert other['requires_explicit_choice'] and other['unit_price'] == '0.10'
+    assert not next(candidate for candidate in line['candidates'] if candidate['id'] == 'ordinary')['requires_explicit_choice']
+    assert env[1].spent() == 0
+
+    # Catalog recall remains complete; a purpose warning controls automation,
+    # rather than hiding the bean, bakery product or utensil from discovery.
+    assert 'other-purpose' in [row['id'] for row in product_facts.search_page(query)['products']]
+    exact = product_facts.discover(other_name)
+    assert exact[0]['id'] == 'other-purpose' and not exact[0]['purpose_review_required']
+    direct = product_facts.discover('other-purpose')
+    assert len(direct) == 1 and not direct[0]['purpose_review_required']
+    selected = env[0].post(procurement.PREFIX + '/from-product', json={
+        'product_id': 'other-purpose', 'quantity': '1', 'unit': 'packages',
+        'mode': 'fixture', 'date': env[3],
+    })
+    assert selected.status_code == 200, selected.text
+    direct_line = selected.json()['lines'][0]
+    assert direct_line['selected_product_id'] == 'other-purpose'
+    assert not next(candidate for candidate in direct_line['candidates'] if candidate['id'] == 'other-purpose')['requires_explicit_choice']
+    assert env[1].spent() == 0
+
+
 @pytest.mark.parametrize('pid,allowed', [('pork', False), ('unknown', False), ('lentils', True)])
 def test_no_pork_filters_actual_search_and_direct_cart_even_when_soft_preferences_disabled(env, pid, allowed):
     client = env[0]

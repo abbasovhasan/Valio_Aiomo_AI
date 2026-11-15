@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from . import catalog, policy, upstream, planning
 from .config import ROOT, BUYER, CUSTOMER, MANDATE, APPROVER, access_codes, MODEL
 from .store import Store, StoreError
-from .auth import Auth, CodeLogin as Login, PasswordLogin, Registration
+from .auth import Auth, CodeLogin as Login, PasswordLogin, Registration, DemoLogin, DemoConfiguration, SessionIdentity, demo_enabled
 
 
 class Strict(BaseModel):
@@ -211,6 +211,14 @@ def create_app(store=None):
     @app.post("/api/v1/auth/login")
     def password_login(data: PasswordLogin, request: Request, response: Response):
         return auth.password_login(data, request, response)
+
+    @app.get("/api/v1/auth/demo", response_model=DemoConfiguration)
+    def quick_demo_configuration():
+        return {"enabled": demo_enabled()}
+
+    @app.post("/api/v1/auth/demo", response_model=SessionIdentity)
+    def quick_demo_login(data: DemoLogin, request: Request, response: Response):
+        return auth.demo_login(data, request, response)
 
     @app.get("/api/v1/session")
     def session(request: Request):
@@ -757,6 +765,8 @@ def create_app(store=None):
 
     from .procurement import register_routes
     register_routes(app, db, buyer, approver, identity, limit)
+    from .approvals import register_routes as register_approvals
+    register_approvals(app, db, approver, limit)
     from .preferences import register_routes as register_preferences
     register_preferences(app, db, buyer, limit)
     from .product_search import register_routes as register_search
@@ -772,10 +782,11 @@ def create_app(store=None):
             raise HTTPException(404, detail="Unknown API operation")
         dist = ROOT / "frontend/dist"
         file = (dist / path).resolve()
+        shell_headers = {"Cache-Control": "no-cache, max-age=0, must-revalidate"}
         if file.is_relative_to(dist.resolve()) and file.is_file():
-            return FileResponse(file)
+            return FileResponse(file, headers=shell_headers if file.suffix.lower() == ".html" else None)
         if (dist / "index.html").exists():
-            return FileResponse(dist / "index.html")
+            return FileResponse(dist / "index.html", headers=shell_headers)
         return JSONResponse(
             {
                 "service": "Aimo Rewind",

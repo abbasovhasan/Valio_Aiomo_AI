@@ -17,7 +17,7 @@ image = (
     .apt_install("tesseract-ocr", "tesseract-ocr-eng", "tesseract-ocr-fin", "libgomp1")
     .pip_install_from_requirements("requirements.txt")
     .add_local_dir(".local/model-bundle/whisper-base", remote_path="/opt/aimo-whisper-base", copy=True)
-    .env({"AIMO_WHISPER_MODEL_PATH": "/opt/aimo-whisper-base"})
+    .env({"AIMO_WHISPER_MODEL_PATH": "/opt/aimo-whisper-base", "AIMO_DEMO_MODE": "true"})
     .add_local_dir("backend", remote_path="/app/backend", ignore=["**/__pycache__/**", "**/*.pyc"])
     .add_local_dir("frontend/dist", remote_path="/app/frontend/dist")
 )

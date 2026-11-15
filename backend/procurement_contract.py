@@ -112,6 +112,18 @@ class ConstraintsResponse(ResponseModel):
     preferences: Literal["balanced", "cheapest", "quality", "origin", "delivery"]
 
 
+class NutrientResponse(ResponseModel):
+    id: str
+    value: NonnegativeText
+    unit: str
+    basis_quantity: PositiveText
+    basis_unit: str
+    precision: str | None = None
+    serving_size: NonnegativeText | None = None
+    serving_unit: str | None = None
+    daily_intake_percent: NonnegativeText | None = None
+
+
 class ProductDetailsResponse(ResponseModel):
     id: str | None = None
     name: str | None = None
@@ -119,9 +131,18 @@ class ProductDetailsResponse(ResponseModel):
     manufacturer: list[str] | None = None
     vendor: str | None = None
     category: str | None = None
+    origin_codes: list[str] | None = None
+    origin_evidence: str | None = None
+    claims: list[str] | None = None
+    certifications: list[str] | None = None
     ingredients: str | None = None
     allergens: list[dict[str, JsonValue]] | None = None
     storage: str | None = None
+    min_storage_temperature: DecimalText | None = None
+    max_storage_temperature: DecimalText | None = None
+    nutrition: list[NutrientResponse] | None = None
+    image_url: str | None = None
+    image_status: Literal["not_supplied", "verified"] | None = None
     # Supplier storage-condition identifiers are codes, never inferred degrees.
     temperature_condition: str | int | None = Field(
         default=None, description="Supplier storage-condition identifier; not a temperature in degrees."
@@ -185,6 +206,8 @@ class CandidateResponse(ResponseModel):
     price_per_requested_unit: NonnegativeText | None = Field(
         default=None, description="EUR sales-pack price divided by verified capacity in the requested unit."
     )
+    price_per_kg: NonnegativeText | None = None
+    price_per_litre: NonnegativeText | None = None
     comparison_delta: SignedMoneyText | None = Field(
         default=None,
         description="Signed EUR item-subtotal change for this choice, including shared-SKU rounding; null when a complete comparison cannot be established.",
@@ -288,7 +311,7 @@ class AuthorityResponse(ResponseModel):
 
 
 class ApprovalStateResponse(ResponseModel):
-    status: Literal["required", "not_required", "blocked", "approved"]
+    status: Literal["required", "not_required", "blocked", "approved", "rejected"]
     threshold: MoneyText
     approved: bool
     policy: AuthorityResponse
@@ -309,6 +332,14 @@ class ExactApprovalResponse(ResponseModel):
     fingerprint: FingerprintText
     approved_at: TimestampText
     expires_at: TimestampText
+
+
+class ExactRejectionResponse(ResponseModel):
+    approver: str
+    approver_role: Literal["approver"]
+    fingerprint: FingerprintText
+    rejected_at: TimestampText
+    reason: str | None
 
 
 class SimulatedReceiptResponse(ResponseModel):
@@ -368,6 +399,7 @@ class ProcurementSessionResponse(ResponseModel):
     source_meal_plan: dict[str, JsonValue] | None = None
     source_recipe: dict[str, JsonValue] | None = None
     last_selected_line_id: str | None = None
+    rejection: ExactRejectionResponse | None = None
 
     @model_validator(mode="after")
     def ready_claim_has_complete_records(self):

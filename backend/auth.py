@@ -12,6 +12,7 @@ import secrets
 import time
 import uuid
 from datetime import datetime, timezone
+from typing import Literal
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
@@ -22,6 +23,13 @@ from .config import APPROVER, BUYER, CUSTOMER, access_codes
 N, R, P = 32768, 8, 3
 SESSION_SECONDS = 8 * 3600
 REMEMBER_SECONDS = 30 * 24 * 3600
+QUICK_DEMO_BUYER = "buyer-quick-demo-v1"
+QUICK_DEMO_CUSTOMER = "customer-quick-demo-v1"
+
+
+def demo_enabled():
+    """Only an explicit server setting enables public demonstration identities."""
+    return os.getenv("AIMO_DEMO_MODE", "").strip().casefold() == "true"
 
 
 class Strict(BaseModel):
@@ -48,6 +56,33 @@ class PasswordLogin(Strict):
     username: str = Field(min_length=1, max_length=40)
     password: str = Field(min_length=1, max_length=128)
     remember_me: bool = False
+
+
+class DemoLogin(Strict):
+    role: Literal["buyer", "approver"]
+    remember_me: bool = False
+
+
+class DemoConfiguration(BaseModel):
+    enabled: bool
+
+
+class SessionIdentity(BaseModel):
+    """Public session information only; cookies remain HTTP-only."""
+    role: Literal["buyer", "approver"]
+    name: str
+    buyer_id: str
+    customer_id: str
+    commercial_customer_id: str
+    commercial_account_note: str
+    workspace_id: str
+    workspace_name: str
+    username: str | None
+    auth_method: Literal["access_code", "password", "demo"]
+    demo_workspace: bool
+    quick_demo: bool = False
+    remember_me: bool
+    session_expires_at: str
 
 
 class Registration(Strict):
@@ -137,10 +172,28 @@ class Auth:
     def identity(self, request):
         token = token_from(request)
         record = self.db.get("session", hashlib.sha256(token.encode()).hexdigest(), BUYER) if token else None
-        if not record or record["expires"] <= time.time():
+        if not record or record["expires"] <= time.time() or (record.get("quick_demo") and not demo_enabled()):
             reject("authentication_required", "Sign in with your account or a private demonstration access code.")
         same_origin(request)
         return self.public(record)
+
+    def demo_login(self, data, request, response):
+        same_origin(request)
+        if not demo_enabled():
+            reject("demo_disabled", "Quick demonstration access is not enabled.", 404)
+        self.throttle("demo-login-" + (request.client.host if request.client else "unknown"), 30)
+        # This intentionally shared pair has its own ledger. Re-entry must
+        # never reset spending, preferences, records or existing private data.
+        with self.db.tx() as c:
+            c.execute("INSERT INTO aimo_accounts(buyer_id,spent_cents) VALUES(?,0) ON CONFLICT(buyer_id) DO NOTHING", (QUICK_DEMO_BUYER,))
+        info = {
+            "role": data.role, "name": "Demo buyer" if data.role == "buyer" else "Demo approver",
+            "buyer_id": QUICK_DEMO_BUYER, "customer_id": QUICK_DEMO_CUSTOMER,
+            "commercial_customer_id": CUSTOMER, "workspace_id": QUICK_DEMO_BUYER,
+            "workspace_name": "Quick demonstration · shared simulated workspace",
+            "username": None, "auth_method": "demo", "demo_workspace": False, "quick_demo": True,
+        }
+        return self.issue(request, response, info, data.remember_me)
 
     def revoke(self, request):
         token = token_from(request)

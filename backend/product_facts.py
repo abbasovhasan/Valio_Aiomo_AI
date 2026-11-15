@@ -6,7 +6,7 @@ remain unknown, and never become proof through keyword matching.
 
 import re
 import unicodedata
-from decimal import Decimal, InvalidOperation, ROUND_CEILING
+from decimal import Decimal, InvalidOperation
 from fractions import Fraction
 from sys import intern
 
@@ -40,6 +40,48 @@ def positive(value):
         return value if value.is_finite() and value > 0 else None
     except (InvalidOperation, TypeError, ValueError):
         return None
+
+
+def finite_text(value, *, nonnegative=False):
+    """Keep supplied measurements as exact JSON strings, including zero."""
+    try:
+        amount = D(str(value))
+        if not amount.is_finite() or (nonnegative and amount < 0):
+            return None
+        return format(amount, "f")
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def nutrition_facts(source):
+    """Retain the declared basis and precision; never compare unlike bases."""
+    result = []
+    for row in source.get("nutritionalContent", []):
+        if not isinstance(row, dict):
+            continue
+        value = finite_text(row.get("value"), nonnegative=True)
+        basis = positive(row.get("basisQuantity"))
+        if value is None or basis is None or not all(isinstance(row.get(k), str) and row[k] for k in ["id", "unit", "basisQuantityUnit"]):
+            continue
+        result.append({
+            "id": row["id"], "value": value, "unit": row["unit"],
+            "basis_quantity": format(basis, "f"), "basis_unit": row["basisQuantityUnit"],
+            "precision": row.get("unitPrecision"),
+            "serving_size": finite_text(row.get("servingSize"), nonnegative=True),
+            "serving_unit": row.get("servingSizeUnit"),
+            "daily_intake_percent": finite_text(row.get("dailyValueIntakePercent"), nonnegative=True),
+        })
+    return result
+
+
+def comparable_prices(product, price):
+    """EUR per proven physical dimension; no density or package-code guesses."""
+    price = finite_text(price, nonnegative=True)
+    result = {}
+    for key, dimension in [("price_per_kg", "kg_per_sales_unit"), ("price_per_litre", "liters_per_sales_unit")]:
+        capacity = positive(product.get(dimension))
+        result[key] = format(D(price) / capacity, "f") if price is not None and capacity else None
+    return result
 
 
 def localized(rows):
@@ -86,8 +128,9 @@ def normalize(pid):
                 weights.add(amount / (1000 if weight["unit"] == "GRM" else 1))
             vol = conversion.get("volume", {})
             amount = positive(vol.get("value"))
-            if amount and vol.get("unit") in {"LTR", "MLT"}:
-                volumes.add(amount / (1000 if vol["unit"] == "MLT" else 1))
+            volume_factors = {"LTR": D(1), "MLT": D(".001"), "CLT": D(".01")}
+            if amount and vol.get("unit") in volume_factors:
+                volumes.add(amount * volume_factors[vol["unit"]])
         if len(weights) == 1:
             mass = next(iter(weights)) * size
             evidence["kg"] = "BASE_UNIT_OR_EACH.netWeight × units.sizeInBaseUnits"
@@ -118,7 +161,8 @@ def normalize(pid):
         count = positive(match[3].replace(",", "."))
         if count and each:
             multipacks.append(count * each / (1000 if match[2].lower() == "g" else 1))
-    if mass and len(multipacks) == 1 and mass != multipacks[0]:
+    measured_kg = sales == base == "KG" and size == 1
+    if mass and not measured_kg and len(multipacks) == 1 and mass != multipacks[0]:
         conversion_issues.append(
             f"Conflicting package mass: structured conversion gives {mass} kg per sales unit, while the supplier name declares a {multipacks[0]} kg multipack. Supplier clarification required."
         )
@@ -151,6 +195,12 @@ def normalize(pid):
         "certifications": sorted({str(v.get("id")) for name in ["nutritionalClaim", "packagingMarkedLabel", "dietType", "dietTypeCode", "certification"] for v in classification(s, name) if v.get("id") in {"HALAL", "KOSHER", "NO_PORK"}}),
         "allergens": classification(s, "allergen") + classification(s, "nonAllergen"),
         "storage": localized(s.get("storageInstructions")),
+        "min_storage_temperature": finite_text(s.get("minTemperature")),
+        "max_storage_temperature": finite_text(s.get("maxTemperature")),
+        "nutrition": nutrition_facts(s),
+        # The supplied schema contains media IDs only and explicitly excludes
+        # files. An ID is not a URL; never synthesize an image endpoint or photo.
+        "image_url": None, "image_status": "not_supplied",
         "temperature_condition": p.get("temperatureCondition"),
         "source": SOURCE, "updated_at": s.get("lastUpdated"),
         "sales_unit": sales, "base_unit": base,
@@ -249,15 +299,25 @@ def suitability(product, dietary=None, origin=None, required_brand=None, require
     return issues
 
 
-def units_for(product, quantity, unit):
-    """Round a dimensionally proven request to sealed whole sales units.
-
-    Integer numerator is the smallest whole-pack count compatible with a rational
-    allowedLotSize, e.g. 0.4 => 2 whole packs, 1.5 => 3 whole packs.
-    """
-    amount = positive(quantity)
+def order_step(product):
+    """Use declared weight increments for proven kg sales; keep packs sealed."""
     lot = positive(product.get("allowed_lot_size"))
-    if not amount or not lot or product.get("variable_unit"):
+    if not lot or product.get("variable_unit"):
+        return None
+    if (product.get("sales_unit") == "KG" and product.get("base_unit") == "KG"
+            and positive(product.get("base_units_per_sales_unit")) == 1
+            and positive(product.get("kg_per_sales_unit")) == 1):
+        return lot
+    # Smallest integer multiple of a rational lot is its numerator: a 0.4 lot
+    # requires two whole packs, while a 1.5 lot requires three whole packs.
+    return D(Fraction(lot).numerator)
+
+
+def units_for(product, quantity, unit):
+    """Round a proven dimension to the supplier increment without float drift."""
+    amount = positive(quantity)
+    step = order_step(product)
+    if not amount or step is None:
         return None
     unit = str(unit).strip().lower()
     factors = {
@@ -270,24 +330,27 @@ def units_for(product, quantity, unit):
         "pcs": ("pieces_per_sales_unit", D(1)),
     }
     if unit in {"package", "packages", "pack", "packs", "sales_unit", "sales_units"}:
-        needed = amount
+        needed = Fraction(amount)
     elif unit in factors:
         field, multiplier = factors[unit]
         capacity = positive(product.get(field))
         if not capacity:
             return None
-        needed = amount * multiplier / capacity
+        needed = Fraction(amount * multiplier) / Fraction(capacity)
     else:
         return None
-    step = D(Fraction(lot).numerator)
-    return (needed / step).to_integral_value(rounding=ROUND_CEILING) * step
+    steps = needed / Fraction(step)
+    return D(-(-steps.numerator // steps.denominator)) * step
 
 
 def _tokens(text):
     text = unicodedata.normalize("NFKD", str(text).casefold())
     text = "".join(c for c in text if not unicodedata.combining(c))
     text = re.sub(r"\b(vanilla|strawberry|banana|sour|condensed)milk\b", r"\1 milk", text)
-    aliases = {"mince": "minced", "ground": "minced", "tomatoes": "tomato", "tomatos": "tomato", "onions": "onion", "lentils": "lentil", "litres": "l", "liters": "l"}
+    # Common compound product nouns must retain their actual purpose. Without
+    # splitting, a butterbean is an ordinary substring match for dairy butter.
+    text = re.sub(r"\b(butter)(beans?|buns?)\b|\b(flour)(scoops?)\b", lambda m: " ".join(part for part in m.groups() if part), text)
+    aliases = {"mince": "minced", "ground": "minced", "tomatoes": "tomato", "tomatos": "tomato", "onions": "onion", "lentils": "lentil", "litres": "l", "liters": "l", "beans": "bean", "buns": "bun", "scoops": "scoop"}
     return [aliases.get(w, w) for w in re.findall(r"[\w]+", text)]
 
 
@@ -352,6 +415,7 @@ def ranked_matches(query, *, purpose=False):
     if query and not terms:
         return []
     prepared = {'bread', 'flourmix', 'cake', 'croissant', 'chips', 'sauce', 'patty', 'patties', 'soup', 'pizza', 'dressing', 'chocolate', 'powder', 'flavoured', 'flavored', 'drinkmix', 'biscuit', 'cookies', 'ice', 'cream', 'spreader', 'knife', 'bowl', 'plate', 'burger', 'salad', 'pastry', 'spice', 'mix', 'meatball', 'meatballs', 'bolognese', 'licorice', 'liquorice', 'date', 'dates', 'precooked', 'cooked', 'browned', 'roasted', 'candy', 'caramel', 'bouillon', 'seasoning', 'shaker', 'mill', 'dishwash', 'cleaning', 'casserole', 'bake', 'pancake', 'puree', 'mash', 'juice', 'topping', 'fried', 'prefried', 'pickled', 'sausage', 'coldcut', 'ketchup', 'strips', 'frankfurter', 'granulated', 'nylon', 'jug'}
+    prepared.update({'bean', 'bun', 'scoop'})
     proteins = {'beef', 'pork', 'chicken', 'turkey', 'lamb', 'salmon', 'tuna', 'herring'}
     ranked = []
     for pid, raw in rows.items():
@@ -386,7 +450,7 @@ def ranked_matches(query, *, purpose=False):
 def search_page(query='', limit=20, offset=0, *, category=None, brand=None,
                 dietary=None, origin=None, require_organic=False,
                 preferred_brand=None, preferred_origin=None, preferred_organic=False,
-                excluded_ingredients=None):
+                excluded_ingredients=None, sort="relevance"):
     """Complete paginated discovery. Only explicit hard filters remove records."""
     matches = ranked_matches(query)
     rows = catalog.load_catalog()
@@ -397,24 +461,31 @@ def search_page(query='', limit=20, offset=0, *, category=None, brand=None,
         raw = rows[pid]
         cat = str(raw.get('category') or '')
         declared_brand = str(raw.get('synkkaData', {}).get('brand') or '').strip()
-        if cat:
-            category_counts[cat] = category_counts.get(cat, 0) + 1
-        if declared_brand:
-            brand_counts[declared_brand] = brand_counts.get(declared_brand, 0) + 1
         # Cheap source filters precede package/ingredient normalization. No
         # safety, quantity, stock or price fact is cached by this lexical index.
-        if category and cat.casefold() != str(category).casefold():
-            continue
-        if brand and not brand_matches(declared_brand, brand):
-            continue
+        category_ok = not category or cat.casefold() == str(category).casefold()
+        brand_ok = not brand or brand_matches(declared_brand, brand)
         p = normalize(pid) if needs_facts else None
         if p is not None and suitability(p, dietary, origin, require_organic=require_organic, excluded_ingredients=excluded_ingredients):
+            continue
+        # Disjunctive facets respect all other hard filters, while keeping the
+        # current facet's real alternatives available for a direct change.
+        if cat and brand_ok:
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+        if declared_brand and category_ok:
+            brand_counts[declared_brand] = brand_counts.get(declared_brand, 0) + 1
+        if not category_ok or not brand_ok:
             continue
         preference = int(bool(preferred_brand) and brand_matches(declared_brand, preferred_brand))
         if p is not None:
             preference += int(bool(preferred_origin) and not suitability(p, [], preferred_origin)) + int(preferred_organic and p.get('organic') is True)
         products.append((0 if score >= 10000 else 1, -preference, -score, pid, p))
-    products.sort(key=lambda row: row[:4])
+    if sort in {"name_asc", "name_desc"}:
+        # Alphabetical sorting covers the entire filtered catalog before page
+        # selection, independent of which products have supplier quotations.
+        products.sort(key=lambda row: (_lexical_record(rows, row[3], rows[row[3]])[5], row[3]), reverse=sort == "name_desc")
+    else:
+        products.sort(key=lambda row: row[:4])
     total = len(products)
     return {'products': [row[4] if row[4] is not None else normalize(row[3]) for row in products[offset:offset + limit]],
             'total': total, 'offset': offset, 'limit': limit,

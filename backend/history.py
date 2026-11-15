@@ -59,6 +59,12 @@ def _not_found():
 
 def _summary(session, state):
     title = next((entry.get("text", "") for entry in session.get("messages", []) if entry.get("role") == "user"), "Purchasing request")
+    meal = session.get("source_meal_plan")
+    if isinstance(meal, dict):
+        title = str(meal.get("dish") or "Meal ingredients")
+        servings = (meal.get("request") or {}).get("servings")
+        if isinstance(servings, int) and servings > 0:
+            title += f" · {servings} servings"
     receipt = session.get("receipt") or {}
     cart = session.get("cart") or {}
     total = receipt.get("total")

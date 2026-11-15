@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ArrowUpRight,
@@ -42,6 +42,9 @@ import { MealPlanner } from "./MealPlanner";
 import { ProcurementDesk } from "./ProcurementDesk";
 import { AuthDialog } from "./AuthDialog";
 import type { WorkspaceSession } from "./AuthDialog";
+import { ApprovalWorkspace } from "./ApprovalWorkspace";
+import { DetailsDialog } from "./ProductDetailsDialog";
+import { api, announceSessionChange, retireSessionRequests, sessionInterrupted } from "./api";
 
 type CheckItem = {
   code: string;
@@ -157,30 +160,6 @@ const scenarios = [
     icon: CircleHelp,
   },
 ];
-async function api(path: string, options: RequestInit = {}) {
-  const headers = new Headers(options.headers);
-  if (!(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  let r = await fetch("/api/v1" + path, {
-    ...options,
-    credentials: "same-origin",
-    headers,
-  });
-  let data = await r.json().catch(() => ({}));
-  if (r.status === 401 && !path.startsWith("/auth/") && path !== "/session") window.dispatchEvent(new Event("aimo-session-expired"));
-  if (!r.ok)
-    throw new Error(
-      typeof data.detail === "string"
-        ? data.detail
-        : Array.isArray(data.detail) ? data.detail.slice(0, 3).map((item: any) => `${String(item.loc?.at(-1) || "Input")}: ${item.msg}`).join(". ")
-        : data.detail?.message ||
-          JSON.stringify(
-            data.detail ||
-              data.error ||
-              "The gateway could not complete this request.",
-          ),
-    );
-  return data;
-}
 function Icon({
   icon: IconName,
   size = 18,
@@ -279,6 +258,9 @@ function App() {
   const [session, setSession] = useState<Session>({ role: null }),
     [workspace, setWorkspace] = useState<any>(null),
     [authOpen, setAuthOpen] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionCheckError, setSessionCheckError] = useState(false);
+  const [sessionRevision, setSessionRevision] = useState(0);
   const [tab, setTab] = useState("purchase"),
     [mode, setMode] = useState("fixture"),
     [scenario, setScenario] = useState("baseline"),
@@ -288,6 +270,20 @@ function App() {
       "Breakfast for the whole hotel. At least 1,000 litres of lactose-free milk, delivered by Monday. Keep the dietary rule.",
     );
   const [quoteSessionId, setQuoteSessionId] = useState<string | null>(null);
+  const activeCartRef = useRef<{ id: string; hasItems: boolean } | null>(null);
+  const [mealCartPrompt, setMealCartPrompt] = useState(false);
+  const mealCartDecision = useRef<((value: boolean) => void) | null>(null);
+  const reportActiveCart = useCallback((value: { id: string; hasItems: boolean } | null) => { activeCartRef.current = value; }, []);
+  function resolveMealCartPrompt(value: boolean) {
+    const resolve = mealCartDecision.current;
+    mealCartDecision.current = null; setMealCartPrompt(false); resolve?.(value);
+  }
+  async function beforeMealQuote() {
+    if (!currentSession.current.role || currentSession.current.role !== "buyer") return false;
+    if (!activeCartRef.current?.hasItems) return true;
+    if (mealCartDecision.current) return false;
+    return new Promise<boolean>((resolve) => { mealCartDecision.current = resolve; setMealCartPrompt(true); });
+  }
   const [run, setRun] = useState<Run | null>(null),
     [busy, setBusy] = useState(false),
     [actionBusy, setActionBusy] = useState(""),
@@ -307,6 +303,11 @@ function App() {
     to: Offer;
   } | null>(null);
   const keys = useRef<Record<string, string>>({});
+  const currentSession = useRef<Session>(session);
+  const checkingSession = useRef(false);
+  const authTransition = useRef(false);
+  const operatorMenu = useRef<HTMLDetailsElement>(null);
+  currentSession.current = session;
   const resultRef = useRef<HTMLDivElement>(null);
   async function loadWorkspace() {
     try {
@@ -316,19 +317,63 @@ function App() {
       /* Session may have expired; do not invent workspace data. */
     }
   }
+  function resetWorkspaceViews() {
+    activeCartRef.current = null; resolveMealCartPrompt(false);
+    setWorkspace(null); setQuoteSessionId(null); setRun(null); setReceipt(null);
+    setSelected(null); setExpanded(null); setEvidence(null); setComparison(null);
+    setError(""); setMobileMenu(false); keys.current = {};
+  }
+  function installSession(next: Session) {
+    currentSession.current = next; setSession(next); setSessionReady(true); setSessionCheckError(false);
+    setSessionRevision((value) => value + 1); resetWorkspaceViews();
+    setTab(next.role === "approver" ? "approvals" : "purchase");
+    if (next.role) void loadWorkspace();
+  }
+  async function restoreSession() {
+    if (checkingSession.current || authTransition.current) return;
+    checkingSession.current = true;
+    try {
+      const next: Session = await api("/session");
+      const old = currentSession.current;
+      if (next.role !== old.role || next.buyer_id !== old.buyer_id || next.customer_id !== old.customer_id || next.quick_demo !== old.quick_demo) {
+        retireSessionRequests(); installSession(next);
+      } else {
+        currentSession.current = next; setSession(next); setSessionReady(true); setSessionCheckError(false);
+      }
+    } catch (e) { if (!sessionInterrupted(e)) { setSessionReady(true); setSessionCheckError(true); } }
+    finally { checkingSession.current = false; }
+  }
+  useEffect(() => { void restoreSession(); }, []);
   useEffect(() => {
-    api("/session")
-      .then((s) => {
-        setSession(s);
-        if (s.role) loadWorkspace();
-      })
-      .catch(() => {});
-  }, []);
-  useEffect(() => {
-    const expire = () => { setSession({ role: null }); setWorkspace(null); setRun(null); setReceipt(null); setQuoteSessionId(null); setAuthOpen(true); setToast("Your session ended. Sign in to reopen your saved cart."); };
+    const expire = () => { retireSessionRequests(); installSession({ role: null }); setAuthOpen(true); setToast("Your session ended. Sign in to reopen your saved cart."); };
+    const check = () => { void restoreSession(); };
+    const visible = () => { if (document.visibilityState === "visible") check(); };
+    const changed = (event: StorageEvent) => {
+      if (event.key === "aimo-session-change") { retireSessionRequests(); checkingSession.current = false; check(); }
+    };
     window.addEventListener("aimo-session-expired", expire);
-    return () => window.removeEventListener("aimo-session-expired", expire);
+    window.addEventListener("aimo-session-check", check);
+    window.addEventListener("focus", check);
+    window.addEventListener("storage", changed);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener("aimo-session-expired", expire);
+      window.removeEventListener("aimo-session-check", check);
+      window.removeEventListener("focus", check);
+      window.removeEventListener("storage", changed);
+      document.removeEventListener("visibilitychange", visible);
+    };
   }, []);
+  useEffect(() => {
+    if (!session.role || !session.session_expires_at) return;
+    let timer: number;
+    const arm = () => {
+      const remaining = Date.parse(session.session_expires_at!) - Date.now();
+      if (remaining <= 0) window.dispatchEvent(new Event("aimo-session-expired"));
+      else timer = window.setTimeout(arm, Math.min(remaining, 2147483647));
+    };
+    arm(); return () => window.clearTimeout(timer);
+  }, [session.role, session.session_expires_at]);
   useEffect(() => {
     if (!busy) return;
     setElapsed(0);
@@ -341,10 +386,12 @@ function App() {
     return () => clearTimeout(t);
   }, [toast]);
   async function logout() {
-    await api("/session", { method: "DELETE" });
-    setSession({ role: null });
-    setWorkspace(null); setQuoteSessionId(null); setRun(null); setReceipt(null); setSelected(null);
-    setToast("Session closed.");
+    authTransition.current = true; retireSessionRequests();
+    try {
+      await api("/session", { method: "DELETE" });
+      retireSessionRequests(); installSession({ role: null }); announceSessionChange();
+      setToast("Session closed.");
+    } finally { authTransition.current = false; void restoreSession(); }
   }
   async function startRun(s = scenario, q = quantity) {
     if (!session.role) {
@@ -531,7 +578,7 @@ function App() {
           aria-label="A4TB Valio Aimo home"
           onClick={(e) => {
             e.preventDefault();
-            setTab("purchase");
+            setTab(session.role === "approver" ? "approvals" : "purchase");
           }}
         >
           <span className="brand-mark">
@@ -548,25 +595,25 @@ function App() {
           aria-label="Main navigation"
           className={mobileMenu ? "mobile-open" : ""}
         >
-          {[["purchase", "Smart order"], ["products", "Products"], ["meals", "Meal planner"], ["history", "History"]].map(([id, label]) => <button key={id} onClick={() => { setTab(id); setMobileMenu(false); }} className={tab === id ? "active" : ""}>{label}</button>)}
+          {(session.role === "approver" ? [["approvals", "Approvals"], ["products", "Products"]] : [["purchase", "Smart order"], ["products", "Products"], ["meals", "Meal planner"], ["history", "History"]]).map(([id, label]) => <button key={id} onClick={() => { setTab(id); setMobileMenu(false); }} className={tab === id ? "active" : ""} aria-current={tab === id ? "page" : undefined}>{label}</button>)}
 
         </nav>
         <div className="topbar-right">
-          <details className="operator-menu"><summary>Demo tools</summary><div><button onClick={() => { setDemoTools((value) => !value); setTab("purchase"); }}>Data & model settings {demoTools ? "✓" : ""}</button>{session.demo_workspace !== false && <><button onClick={() => setTab("desk")}>Trust scenarios</button><button onClick={() => setTab("recorder")}>Decision recorder</button></>}<button onClick={() => setTab("gateway")}>Gateway API</button><button onClick={() => setAbout(true)}>About trust</button></div></details>
+          <details className="operator-menu" ref={operatorMenu}><summary>Demo tools</summary><div onClick={(event) => { if ((event.target as HTMLElement).closest("button")) { operatorMenu.current?.removeAttribute("open"); operatorMenu.current?.querySelector("summary")?.focus(); } }}>{session.role !== "approver" && <button onClick={() => { setDemoTools((value) => !value); setTab("purchase"); }}>Data & model settings {demoTools ? "✓" : ""}</button>}{!session.quick_demo && session.demo_workspace !== false && <><button onClick={() => setTab("desk")}>Trust scenarios</button><button onClick={() => setTab("recorder")}>Decision recorder</button></>}<button onClick={() => setTab("gateway")}>Gateway API</button><button onClick={() => setAbout(true)}>About trust</button></div></details>
 
           <span className="simulation">
             <span /> SIMULATED ORDERS ONLY
           </span>
-          <button className="profile-button" aria-label="Account and sign-in" onClick={() => setAuthOpen(true)}>
+          <button className="profile-button" aria-label="Account and sign-in" onClick={() => setAuthOpen(true)} disabled={!sessionReady}>
             <span className="avatar">
               {session.role === "approver" ? "LK" : session.role ? "AB" : "↗"}
             </span>
             <span>
-              {session.name || "Open your desk"}
+              {sessionReady ? session.name || "Sign in" : "Checking session…"}
               <small>
                 {session.role
-                  ? `${session.role} · ${session.demo_workspace === false ? "private workspace" : "shared demo"}`
-                  : "Private demo access"}
+                  ? `${session.role} · ${session.quick_demo ? "demo workspace" : session.demo_workspace === false ? "private workspace" : "shared demo"}`
+                  : "Demo or account"}
               </small>
             </span>
             <ChevronDown size={14} />
@@ -581,6 +628,8 @@ function App() {
         </div>
       </header>
       <main>
+        {!sessionReady && <p className="session-check-banner" role="status"><LoaderCircle size={16} className="spin" />Restoring your workspace…</p>}
+        {sessionCheckError && <div className="session-check-banner" role="status">Session check unavailable.<button type="button" onClick={() => void restoreSession()}>Retry</button></div>}
         {error && (
           <div className="error-banner" role="alert">
             <ShieldX size={20} />
@@ -598,17 +647,19 @@ function App() {
           </div>
         )}
         <div hidden={!["purchase", "products", "history"].includes(tab)}>
-          <ProcurementDesk key={session.buyer_id || "anonymous"} buyerId={session.buyer_id} api={api} role={session.role} active={tab === "purchase" && !authOpen} view={tab === "products" ? "products" : tab === "history" ? "history" : "order"} onNavigate={(view) => setTab(view === "order" ? "purchase" : view)} demoTools={demoTools} onSignIn={() => setAuthOpen(true)} onUpdated={loadWorkspace} initialSessionId={quoteSessionId} />
+          {sessionReady && (session.role !== "approver" || tab === "products") && <ProcurementDesk key={`${session.buyer_id || "anonymous"}:${session.role || "none"}:${sessionRevision}`} buyerId={session.buyer_id} api={api} role={session.role} active={tab === "purchase" && !authOpen} view={tab === "products" ? "products" : tab === "history" ? "history" : "order"} onNavigate={(view) => setTab(view === "order" ? "purchase" : view)} demoTools={demoTools} onSignIn={() => setAuthOpen(true)} onUpdated={loadWorkspace} initialSessionId={quoteSessionId} onActiveCartChange={reportActiveCart} />}
         </div>
         <div hidden={tab !== "meals"}>
-          <MealPlanner
-            key={session.buyer_id || "anonymous"}
+          {sessionReady && session.role !== "approver" && <MealPlanner
+            key={`${session.buyer_id || "anonymous"}:${session.role || "none"}:${sessionRevision}`}
             onQuoteSession={(id) => { setQuoteSessionId(id); setTab("purchase"); }}
+            onBeforeQuote={beforeMealQuote}
             api={api}
             role={session.role}
             onSignIn={() => setAuthOpen(true)}
-          />
+          />}
         </div>
+        {tab === "approvals" && session.role === "approver" && <ApprovalWorkspace key={`${session.buyer_id}:${session.role}:${sessionRevision}`} api={api} onSwitchRole={() => setAuthOpen(true)} />}
         {tab === "desk" && (
           <div className="desk-grid">
             <aside className="brief-column">
@@ -1405,10 +1456,10 @@ function App() {
               </p>
               <div className="architecture-flow">
                 {[
-                  ["External buyer", "NVIDIA Nemotron"],
+                  ["External buyer", "Customer or agent"],
                   ["Trust gateway", "FastAPI · typed tools"],
                   ["Evidence", "Valio sandbox"],
-                  ["Commitment", "Aiven / local SQLite"],
+                  ["Persistent ledger", workspace?.storage === "postgres" ? "PostgreSQL" : workspace?.storage === "sqlite" ? "SQLite" : "Transactional storage"],
                 ].map(([title, sub], i) => (
                   <React.Fragment key={title}>
                     {i > 0 && <ArrowRight size={20} />}
@@ -1428,12 +1479,14 @@ function App() {
               <div className="api-endpoints">
                 <h3>One contract for every client.</h3>
                 {[
+                  ["POST", "/api/v1/auth/demo", "Enter a predefined demo role on explicitly enabled demonstration hosts."],
+                  ["POST", "/api/v1/auth/login", "Sign in to an existing account."],
                   [
                     "POST",
                     "/api/v1/session",
                     "Exchange a server-issued access code.",
                   ],
-                  ["GET", "/api/v1/products", "Search the static catalogue."],
+                  ["GET", "/api/v1/products", "Browse the catalog and request bounded price and availability evidence."],
                   [
                     "POST",
                     "/api/v1/meal-plans",
@@ -1444,22 +1497,14 @@ function App() {
                     "/api/v1/meal-plans/{id}",
                     "Review a saved plan in your buyer scope.",
                   ],
-                  ["POST", "/api/v1/runs", "Create a grounded purchasing run."],
-                  [
-                    "POST",
-                    "/api/v1/offers/{id}/approve",
-                    "Approve an exact fingerprint as approver.",
-                  ],
-                  [
-                    "POST",
-                    "/api/v1/offers/{id}/commit",
-                    "Commit once, with an idempotency key.",
-                  ],
-                  [
-                    "GET",
-                    "/api/v1/receipts/{id}",
-                    "Inspect a scoped simulated receipt.",
-                  ],
+                  ["POST", "/api/v1/procurement/sessions", "Create a purchasing draft from customer requirements."],
+                  ["POST", "/api/v1/procurement/sessions/{id}/actions", "Edit and re-quote a versioned draft."],
+                  ["GET", "/api/v1/approvals", "List requests in the approver's authorized workspace."],
+                  ["POST", "/api/v1/procurement/sessions/{id}/approve", "Approve the exact current basket fingerprint."],
+                  ["POST", "/api/v1/procurement/sessions/{id}/reject", "Decline the exact basket with an optional reason."],
+                  ["POST", "/api/v1/procurement/sessions/{id}/confirm", "Buyer confirms an eligible simulation with an idempotency key."],
+                  ["GET", "/api/v1/procurement/sessions/{id}/verify", "Verify the saved simulator receipt."],
+                  ["GET", "/api/v1/history", "Inspect the buyer's own saved requests and simulated orders."],
                 ].map(([method, path, desc]) => (
                   <div className="endpoint" key={path}>
                     <span>{method}</span>
@@ -1469,18 +1514,24 @@ function App() {
                     </div>
                   </div>
                 ))}
+                <details className="gateway-legacy"><summary>Legacy mandate-lab endpoints</summary><p>The separate hotel rehearsal requires its authorized access-code workspace.</p>{[
+                  ["POST", "/api/v1/runs", "Create a hotel-mandate rehearsal."],
+                  ["POST", "/api/v1/offers/{id}/approve", "Approve an exact hotel offer."],
+                  ["POST", "/api/v1/offers/{id}/commit", "Record an eligible hotel simulation once."],
+                  ["GET", "/api/v1/receipts/{id}", "Inspect the scoped hotel simulator receipt."],
+                ].map(([method,path,description]) => <div className="endpoint" key={path}><span>{method}</span><div><code>{path}</code><p>{description}</p></div></div>)}</details>
               </div>
               <div className="api-proof">
                 <Braces size={27} />
                 <h3>Trust it by testing it.</h3>
                 <p>
-                  Use the independent Python client. An unauthorised role,
-                  changed fingerprint, stale offer or duplicate request meets
-                  the same server checks.
+                  Use the independent HTTP smoke check to exercise demo roles,
+                  protected routes and exact approval decisions. Its default
+                  run does not confirm an order.
                 </p>
                 <pre>
                   <code>
-                    ./start.sh{`\n\n`}python scripts/agent_client.py --help
+                    python scripts/role_demo_smoke.py --url {window.location.origin}
                   </code>
                 </pre>
                 <a
@@ -1501,7 +1552,7 @@ function App() {
               {[
                 ["Valio Aimo", "Product / price / availability"],
                 ["NVIDIA", "Nemotron grounded planning"],
-                ["Aiven", "Transactional order ledger"],
+                ["Persistent ledger", "Hosted SQLite · local PostgreSQL option"],
                 ["Codex", "Implementation & verification"],
               ].map(([name, desc]) => (
                 <div key={name}>
@@ -1526,36 +1577,16 @@ function App() {
           </span>
         </div>
       </footer>
-      {authOpen && <AuthDialog api={api} session={session} onClose={() => setAuthOpen(false)} onLogout={logout} onSignedIn={async (next) => {
-        setSession(next); setQuoteSessionId(null); setRun(null); setReceipt(null); setSelected(null); setTab("purchase");
-        keys.current = {}; await loadWorkspace(); setToast(`Signed in as ${next.name || next.role}`);
+      {authOpen && <AuthDialog api={api} session={session} onClose={() => setAuthOpen(false)} onLogout={logout} onSessionChanging={() => { authTransition.current = true; retireSessionRequests(); checkingSession.current = false; }} onSessionSettled={() => { authTransition.current = false; void restoreSession(); }} onSignedIn={(next) => {
+        retireSessionRequests(); installSession(next); announceSessionChange(); setToast(`Signed in as ${next.name || next.role}`);
       }} />}
+      {mealCartPrompt && <DetailsDialog title="Start a meal cart?" closeLabel="Keep current cart" onClose={() => resolveMealCartPrompt(false)}>
+        <p>Your current cart will stay saved in History. The meal ingredients will open in a new cart for review.</p>
+        <div className="meal-cart-decision"><button className="secondary-button" type="button" onClick={() => resolveMealCartPrompt(false)}>Keep current cart</button><button className="primary-button" type="button" onClick={() => resolveMealCartPrompt(true)}>Start meal cart<ArrowRight size={16} /></button></div>
+      </DetailsDialog>}
       {evidence && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setEvidence(null);
-          }}
-        >
-          <section
-            className="evidence-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="evidence-title"
-          >
-            <div className="evidence-modal-header">
-              <div>
-                <div className="eyebrow">INSPECT THE RECORD</div>
-                <h2 id="evidence-title">Evidence, without embellishment.</h2>
-              </div>
-              <button
-                className="icon-button"
-                onClick={() => setEvidence(null)}
-                aria-label="Close evidence"
-              >
-                <X size={22} />
-              </button>
-            </div>
+        <DetailsDialog title="Evidence, without embellishment." closeLabel="Close evidence" onClose={() => setEvidence(null)}>
+          <div className="operator-evidence">
             <p>
               Source data and recorded decisions. A fingerprint binds an offer;
               it does not guarantee future stock or delivery.
@@ -1574,35 +1605,12 @@ function App() {
             >
               <Copy size={15} /> Copy evidence
             </button>
-          </section>
-        </div>
+          </div>
+        </DetailsDialog>
       )}
       {about && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setAbout(false);
-          }}
-        >
-          <section
-            className="about-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="about-title"
-          >
-            <button
-              className="modal-close icon-button"
-              onClick={() => setAbout(false)}
-              aria-label="Close explanation"
-            >
-              <X size={22} />
-            </button>
-            <div className="eyebrow">TWENTY SECONDS TO TRUST</div>
-            <h2 id="about-title">
-              An agent can suggest.
-              <br />
-              <em>Only the gateway can commit.</em>
-            </h2>
+        <DetailsDialog title="About trust" subtitle="Purchasing rules are enforced on the server." closeLabel="Close explanation" onClose={() => setAbout(false)}>
+          <div className="operator-about">
             <div className="about-steps">
               {[
                 [
@@ -1631,21 +1639,22 @@ function App() {
                 </div>
               ))}
             </div>
-            <button
+            {!session.quick_demo && session.demo_workspace !== false && session.role !== "approver" && <button
               className="primary-button"
               onClick={() => {
                 setAbout(false);
                 setScenario("shortage");
+                setTab("desk");
               }}
             >
               Try the shortage rehearsal <ArrowRight size={17} />
-            </button>
+            </button>}
             <p className="small-muted">
               The hotel and mandate are authored examples. All orders are
               simulated.
             </p>
-          </section>
-        </div>
+          </div>
+        </DetailsDialog>
       )}
       {toast && (
         <div className="toast" role="status">

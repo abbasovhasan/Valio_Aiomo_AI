@@ -79,6 +79,10 @@ class Fingerprint(Strict):
     fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class Rejection(Fingerprint):
+    reason: str | None = Field(default=None, max_length=500)
+
+
 def fail(code, message, status=409):
     raise HTTPException(status, detail={"code": code, "message": message})
 
@@ -123,6 +127,8 @@ def fixture_lookup(customer, day, ids):
             # claim of observed commercial prices.
             cents = 200 + int(hashlib.sha256(pid.encode()).hexdigest()[:4], 16) % 800
             row["catalogPrice"]["valueWithTax"] = cents / 100
+            if (tax_rate := decimal(row.get("tax", {}).get("taxRate"))) is not None and tax_rate >= 0:
+                row["catalogPrice"]["value"] = float(D(cents) / (D(100) + tax_rate))
     for row in result["availability"]["products"]:
         p = product_facts.normalize(str(row["productId"]))
         for schedule in row.get("scheduleLines", []):
@@ -145,11 +151,11 @@ def item_facts(product, quantity, unit):
 
 def round_sales_units(product, exact):
     """Round aggregated rational requirements without recurring-decimal drift."""
-    lot = decimal(product.get("allowed_lot_size"))
-    if lot is None or lot <= 0 or exact <= 0 or product.get("variable_unit"):
+    step = product_facts.order_step(product)
+    if step is None or exact <= 0:
         return None
-    step = Fraction(lot).numerator
-    return D(-(-exact.numerator // (exact.denominator * step)) * step)
+    steps = exact / Fraction(step)
+    return D(-(-steps.numerator // steps.denominator)) * step
 
 
 def base_session(scope, mode, use_model=False):
@@ -373,6 +379,7 @@ def current_selection_subtotal(lines, replacement=None):
 def quote(session, spent):
     session["offer"] = None
     session["receipt"] = None
+    session["rejection"] = None
     session["can_confirm"] = False
     questions = []
     blockers = list(session.get("ambiguities", []))
@@ -459,6 +466,7 @@ def quote(session, spent):
                 "eligibility_issues": eligibility_issues, "quote_issues": [issue for issue in issues if issue not in eligibility_issues], "selectable": not eligibility_issues,
                 "preference_matches": soft_matches(p, line),
                 "price_per_requested_unit": format(price / pack, "f") if price is not None and pack is not None and pack > 0 else None,
+                **product_facts.comparable_prices(p, price),
                 "comparison_delta": None, "comparison_note": None,
                 "available_sales_units": commercial_facts.get("available_sales_units"),
                 "next_available_date": commercial_facts.get("next_available_date"),
@@ -566,8 +574,11 @@ def quote(session, spent):
         blockers.append(f"Item subtotal exceeds your hard budget by €{money(-remaining)}. Increase the budget explicitly, change products or reduce quantities.")
         all_valid = False
     snapshot = authority()
-    if subtotal > D(snapshot["exception_limit"]) or spent + int(subtotal * 100) > int(D(snapshot["cumulative_limit"]) * 100):
-        blockers.append("The whole basket exceeds the configured exception ceiling or shared cumulative cap.")
+    if subtotal > D(snapshot["exception_limit"]):
+        blockers.append("Purchasing policy: this basket exceeds the permitted per-order limit. Reduce quantities or ask your workspace manager to review the configured policy. Increasing your budget does not change this limit.")
+        all_valid = False
+    if spent + int(subtotal * 100) > int(D(snapshot["cumulative_limit"]) * 100):
+        blockers.append("Purchasing policy: this workspace has insufficient remaining simulated purchasing allowance. Reduce the basket or ask your workspace manager to review the allowance. Increasing your budget does not replenish it.")
         all_valid = False
     expiry = policy.parse_time(snapshot["expires_at"])
     if not expiry or expiry <= policy.now():
@@ -637,7 +648,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
         result["interpretation_notes"] = current_notes
         for line in result["lines"]:
             for candidate in line.get("candidates", []):
-                candidate["product_details"] = {key: candidate.get("product", {}).get(key) for key in ["id", "name", "brand", "manufacturer", "vendor", "category", "ingredients", "allergens", "storage", "temperature_condition", "source", "updated_at", "sales_unit", "base_unit", "base_units_per_sales_unit", "allowed_lot_size", "kg_per_sales_unit", "liters_per_sales_unit", "pieces_per_sales_unit", "conversion_evidence", "conversion_issues", "reliability", "carbon_group_estimate", "organic", "organic_evidence"]}
+                candidate["product_details"] = {key: candidate.get("product", {}).get(key) for key in ["id", "name", "brand", "manufacturer", "vendor", "category", "origin_codes", "origin_evidence", "claims", "certifications", "ingredients", "allergens", "storage", "min_storage_temperature", "max_storage_temperature", "nutrition", "image_url", "image_status", "temperature_condition", "source", "updated_at", "sales_unit", "base_unit", "base_units_per_sales_unit", "allowed_lot_size", "kg_per_sales_unit", "liters_per_sales_unit", "pieces_per_sales_unit", "conversion_evidence", "conversion_issues", "reliability", "carbon_group_estimate", "organic", "organic_evidence"]}
                 candidate.pop("product", None)
                 candidate.pop("commercial", None)
         if result.get("offer"):
@@ -758,14 +769,17 @@ def register_routes(app, db, buyer, approver, identity, limit):
             query = str(source_line.get("search_query", "")).strip()
             if not query:
                 fail("invalid_plan", "A saved ingredient lacks a catalog search query. Rebuild the meal plan.", 422)
-            dietary = ["gluten_free"] if source_line.get("gluten_free_required") else []
+            explicit_dietary = source_line.get("dietary")
+            dietary = list(explicit_dietary) if isinstance(explicit_dietary, list) else (["gluten_free"] if source_line.get("gluten_free_required") else [])
             # Shared non-meat ingredients serve the vegetarian group too. No
             # name or recipe choice grants a missing catalog dietary claim.
             meat = "beef" in query.casefold()
-            if not meat and (request.get("vegetarian", 0) > 0 or "vegetarian" in source_line.get("ingredient", "").casefold()):
+            if explicit_dietary is None and not meat and (request.get("vegetarian", 0) > 0 or "vegetarian" in source_line.get("ingredient", "").casefold()):
                 dietary.append("vegetarian")
-            origin = source_line.get("meat_origin")
-            session["lines"].append({"id": policy.uid("line"), "requested_label": query, "quantity": str(quantity), "unit": "kg", "dietary": dietary, "origin": origin if meat and origin in ["finland", "eu"] else None, "max_unit_price": None, **copy.deepcopy(ITEM_OPTIONS), "selected_product_id": pid, "selection_reason": "Selected explicitly in the saved kitchen plan." if pid else None, "meal_plan_line": {"index": index, "ingredient": source_line.get("ingredient"), "servings": source_line.get("servings"), "grams_per_serving": source_line.get("grams_per_serving"), "original_required_kg": str(quantity)}})
+            origin = source_line.get("origin") if "origin" in source_line else source_line.get("meat_origin") if meat else None
+            options = copy.deepcopy(ITEM_OPTIONS)
+            options.update(preferred_brand=source_line.get("preferred_brand") or request.get("preferred_brand"), preferred_origin=source_line.get("preferred_origin") or request.get("preferred_origin"))
+            session["lines"].append({"id": policy.uid("line"), "requested_label": query, "quantity": str(quantity), "unit": "kg", "dietary": dietary, "origin": origin if origin in ["finland", "eu"] else None, "max_unit_price": None, **options, "selected_product_id": pid, "selection_reason": "Selected explicitly in the saved kitchen plan." if pid else None, "meal_plan_line": {"index": index, "ingredient_id": source_line.get("ingredient_id"), "ingredient": source_line.get("ingredient"), "servings": source_line.get("servings"), "grams_per_serving": source_line.get("grams_per_serving"), "original_required_kg": str(quantity)}})
         if data.apply_preferences:
             from .preferences import apply_saved
             apply_saved(session, db, scope, apply_priority=False)
@@ -869,6 +883,8 @@ def register_routes(app, db, buyer, approver, identity, limit):
         offer = old.get("offer")
         if not offer or offer["status"] != "approval_required" or not hmac.compare_digest(offer["fingerprint"], data.fingerprint):
             fail("not_approvable", "Approve only the exact current basket requiring a spend exception.")
+        if (old.get("rejection") or {}).get("fingerprint") == offer["fingerprint"]:
+            fail("basket_rejected", "This exact basket was rejected. The buyer must revise or refresh it before another decision.")
         if fingerprint(offer) != offer["fingerprint"] or offer["authority"] != authority() or policy.parse_time(offer["expires_at"]) <= policy.now():
             fail("stale_offer", "Refresh the basket and obtain a new exact approval.")
         if offer.get("approved"):
@@ -881,6 +897,32 @@ def register_routes(app, db, buyer, approver, identity, limit):
         session["can_confirm"] = True
         compare_save(old, session)
         db.audit(policy.uid("audit"), scope["buyer_id"], "basket_approved", session["offer"]["approval"])
+        return public(session)
+
+    @app.post(PREFIX + "/{id}/reject", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
+    def reject_basket(id: str, data: Rejection, scope=Depends(approver)):
+        limit("reject-" + scope["buyer_id"], 30)
+        old = load(id, scope)
+        if old.get("receipt") or old.get("checkout_pending"):
+            fail("cart_closed", "This basket is confirmed or being confirmed.")
+        offer = old.get("offer")
+        if not offer or offer["status"] != "approval_required" or not hmac.compare_digest(offer["fingerprint"], data.fingerprint):
+            fail("not_rejectable", "Reject only the exact current basket requiring a spend exception.")
+        if fingerprint(offer) != offer["fingerprint"] or offer["authority"] != authority():
+            fail("stale_offer", "The basket changed. Reload it before making a decision.")
+        if (old.get("rejection") or {}).get("fingerprint") == offer["fingerprint"]:
+            return public(old)
+        if offer.get("approved"):
+            fail("decision_recorded", "This exact basket was already approved. The buyer must revise it before a different decision.")
+        session = copy.deepcopy(old)
+        session["version"] += 1
+        session["rejection"] = {"approver": scope["name"], "approver_role": "approver", "fingerprint": offer["fingerprint"], "rejected_at": policy.now().isoformat(), "reason": (data.reason or "").strip() or None}
+        session["approval"].update(status="rejected", approved=False)
+        session["can_confirm"] = False
+        session["order_status"] = "NEEDS_CLARIFICATION"
+        session["assistant_message"] = "The approver rejected this basket. Review the decision, then revise or refresh the basket before requesting a new approval."
+        compare_save(old, session)
+        db.audit(policy.uid("audit"), scope["buyer_id"], "basket_rejected", {"session_id": id, **session["rejection"]})
         return public(session)
 
     @app.post(PREFIX + "/{id}/confirm", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)

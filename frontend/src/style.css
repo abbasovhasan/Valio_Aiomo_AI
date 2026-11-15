@@ -3549,6 +3549,8 @@ h1 em {
 }
 /* Shared header: customer destinations first; technical tools are opt-in. */
 .operator-menu { position:relative; font-size:11px; color:#53634d; }
+.session-check-banner { display:flex; align-items:center; justify-content:center; gap:10px; margin:0 auto 18px; padding:14px; color:#52664a; font-size:13px; }
+.session-check-banner button { padding:8px 12px; border:1px solid #d0d7c9; border-radius:5px; background:#fcfcf7; }
 .operator-menu > summary { cursor:pointer; white-space:nowrap; padding:8px; }
 .operator-menu > div { position:absolute; right:0; top:100%; z-index:25; min-width:210px; background:#fff; border:1px solid #d7dfcc; border-radius:5px; padding:7px; box-shadow:0 8px 24px #1c352218; }
 .operator-menu button { display:block; width:100%; padding:10px; text-align:left; font-size:12px; border-radius:3px; }
@@ -3556,3 +3558,13 @@ h1 em {
 .topbar { height:78px; gap:32px; }
 main { padding-top:26px; }
 @media(max-width:760px) { .topbar { gap:12px; } .operator-menu > summary { font-size:10px; } .topbar-right { gap:5px; } }
+@media(max-width:360px) { .topbar { padding-left:12px; padding-right:12px; gap:6px; } .brand-sub,.brand-divider { display:none; } .topbar-right { gap:3px; } .profile-button,.mobile-toggle { min-height:44px; min-width:40px; } .operator-menu > summary { padding:8px 5px; } }
+.meal-cart-decision { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; margin-top:24px; }
+.operator-evidence > p { color:#52634f; font-size:14px; line-height:1.7; }
+.operator-evidence pre { padding:18px; border:1px solid #d5dfca; background:#edf2e4; border-radius:4px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; line-height:1.7; user-select:text; }
+.operator-about .about-steps h3 { font-size:15px; font-weight:600; }
+.operator-about .about-steps p { font-size:14px; color:#52634f; }
+.operator-about > .primary-button { width:100%; margin:16px 0; }
+.operator-about > .small-muted { font-size:13px; }
+.gateway-legacy { margin-top:20px; font-size:13px; color:#52634f; }
+.gateway-legacy summary { cursor:pointer; min-height:44px; padding:12px 0; }

@@ -30,7 +30,7 @@ def test_every_actual_long_name_can_be_selected_and_followed_up_without_losing_r
     store = Store(tmp_path / 'long-name-cart.sqlite', postgres=False)
 
     def buyer():
-        return {'role': 'buyer', 'name': 'Source regression buyer', 'buyer_id': BUYER, 'customer_id': CUSTOMER}
+        return {'role': 'buyer', 'name': 'Source regression buyer', 'buyer_id': BUYER, 'customer_id': CUSTOMER, 'actor_id': 'source-test-buyer', 'principal_id': 'access_code:buyer'}
 
     procurement.register_routes(app, store, buyer, buyer, buyer, lambda *args: None)
     client = TestClient(app)

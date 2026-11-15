@@ -31,3 +31,7 @@
 .approval-loading { display:flex; gap:9px; align-items:center; }
 @media(max-width:760px) { .approval-workspace { padding:24px 18px 36px; } .approval-heading { align-items:flex-start; } .approval-heading h1 { font-size:25px; } .approval-heading>button { padding:9px; font-size:12px; } .approval-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } .approval-entry,.approval-review { padding:18px; } .approval-entry,.approval-items article { align-items:stretch; flex-direction:column; gap:12px; } .approval-entry button,.approval-items article>button { align-self:flex-start; } }
 @media(max-width:360px) { .approval-workspace { padding:22px 12px 32px; } .approval-heading { gap:8px; } .approval-summary { gap:18px 10px; } .approval-summary strong { font-size:16px; } .approval-decision>div { flex-direction:column; } }
+.approval-review-region { min-width:0; }
+.approval-review-region:focus { outline:none; }
+.approval-entry .approval-reason { color:#785332; }
+.approval-entry .approval-entry-note { font-size:12px; color:#697760; }

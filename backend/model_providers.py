@@ -10,6 +10,7 @@ import httpx
 
 from .config import MODEL
 from .upstream import UpstreamError
+from .http_clients import provider_client
 
 
 @dataclass(frozen=True)
@@ -48,11 +49,12 @@ def nvidia_tool(system, content, schema, function_name, model=None, max_tokens=2
     }
     started = time.perf_counter()
     try:
-        with httpx.Client(timeout=httpx.Timeout(45, connect=5)) as client:
+        with provider_client("nvidia") as client:
             for attempt in range(2):
                 response = client.post(
                     "https://integrate.api.nvidia.com/v1/chat/completions",
                     headers={"Authorization": "Bearer " + key}, json=payload,
+                    timeout=httpx.Timeout(45, connect=5),
                 )
                 if response.status_code not in {429, 502, 503, 504} or attempt:
                     break

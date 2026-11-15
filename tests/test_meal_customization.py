@@ -129,7 +129,7 @@ def test_custom_plan_bridge_preserves_exact_choices_prefs_and_hard_budget(env):
     assert [Decimal(line["quantity"]) for line in cart["lines"]] == [Decimal("5"), Decimal("1")]
     assert all(line["selected_product_id"] == "carrot" and "vegan" in line["dietary"] and line["preferred_brand"] == "Kitchen Test" and line["preferred_origin"] == "finland" for line in cart["lines"])
     assert len(cart["cart"]["items"]) == 1 and cart["cart"]["items"][0]["quantity_sales_units"] == "3"
-    assert any("hard budget" in question["prompt"] for question in cart["clarification_questions"])
+    assert any("requested budget" in question["prompt"] for question in cart["clarification_questions"])
     assert client.get("/api/v1/meal-plans/" + plan["id"]).json() == plan
     assert store.spent() == 0
 

@@ -16,7 +16,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, Header, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from . import catalog, policy, upstream, product_facts
 from .config import MANDATE
@@ -29,6 +29,16 @@ ITEM_OPTIONS = {"required_brand": None, "preferred_brand": None, "preferred_orig
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("*", mode="after")
+    @classmethod
+    def valid_text_encoding(cls, value):
+        if isinstance(value, str):
+            try:
+                value.encode("utf-8")
+            except UnicodeEncodeError:
+                raise ValueError("Enter valid Unicode text.") from None
+        return value
 
 
 class CreateSession(Strict):
@@ -77,9 +87,25 @@ class FromProduct(Strict):
 
 class Fingerprint(Strict):
     fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    version: int | None = Field(default=None, ge=1)
 
 
 class Rejection(Fingerprint):
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class ApprovalRequest(Fingerprint):
+    version: int = Field(ge=1)
+    explanation: str | None = Field(default=None, max_length=500)
+
+
+class ChangesRequest(Fingerprint):
+    version: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class Cancellation(Strict):
+    version: int = Field(ge=1)
     reason: str | None = Field(default=None, max_length=500)
 
 
@@ -100,6 +126,12 @@ def money(value):
 
 
 def authority():
+    keys = ["autonomous_limit", "exception_limit", "cumulative_limit", "expires_at", "allow_budget_exceptions"]
+    if any(key not in MANDATE for key in keys):
+        fail("policy_unavailable", "Trusted purchasing policy is incomplete. Ask the operator to restore it; no purchasing authority is granted.", 503)
+    amounts = [decimal(MANDATE[key]) for key in keys[:3]]
+    if any(value is None or value < 0 or value > 1000000 or value != value.quantize(D(".01")) for value in amounts) or not amounts[0] <= amounts[1] <= amounts[2] or not policy.parse_time(MANDATE["expires_at"]) or not isinstance(MANDATE["allow_budget_exceptions"], bool):
+        fail("policy_unavailable", "Trusted purchasing policy is invalid. No purchasing authority is granted.", 503)
     return {
         "id": "customer-confirmed-demo-basket-v1",
         "assortment": "Customer explicitly reviews selected real catalog products; hard dietary evidence remains mandatory.",
@@ -109,7 +141,99 @@ def authority():
         "expires_at": MANDATE["expires_at"],
         "confirmation_required": True,
         "orders": "simulated_only",
+        "budget_exceptions": MANDATE["allow_budget_exceptions"],
+        "approver_permissions": ["requested_budget", "spending_authority"],
+        "cumulative_scope": "Lifetime committed simulated spend for this buyer workspace; no calendar reset or verified bank/credit balance.",
+        "pending_reservations": False,
     }
+
+
+def decision_blockers(session, scope, assignment=None):
+    reasons = []
+    if not assignment or not assignment.get("active") or assignment.get("customer_id") != session["customer_id"] or scope.get("principal_id") not in assignment.get("approver_principals", []):
+        reasons.append("This manager is not currently assigned to the request’s workspace.")
+    else:
+        required = set(session.get("approval", {}).get("reasons", []))
+        maximum = decimal(assignment.get("max_total"))
+        total = decimal((session.get("offer") or {}).get("total"))
+        if not required.issubset(set(assignment.get("permissions", []))) or maximum is None or total is None or total > maximum:
+            reasons.append("The assigned manager lacks permission or financial authority for all requested exceptions.")
+    if not session.get("requester_actor") or not session.get("requester_principal"):
+        return reasons + ["The buyer must refresh this older draft before it can receive an independent decision."]
+    if not scope.get("actor_id") or not scope.get("principal_id"):
+        return reasons + ["A server-authenticated manager identity is required."]
+    if scope["actor_id"] == session["requester_actor"] or scope["principal_id"] == session["requester_principal"]:
+        reasons.append("You cannot decide your own request by switching roles. Use a separate authorized manager browser/session.")
+    return reasons
+
+
+def assignment_blockers(session, assignment):
+    if not assignment or not assignment.get("active") or assignment.get("customer_id") != session["customer_id"] or not assignment.get("approver_principals"):
+        return ["No eligible manager is currently assigned to this workspace. Keep editing or ask the operator to restore the assignment."]
+    reasons = set(session.get("approval", {}).get("reasons", []))
+    maximum = decimal(assignment.get("max_total"))
+    total = decimal((session.get("cart") or {}).get("subtotal"))
+    if not reasons.issubset(set(assignment.get("permissions", []))) or maximum is None or total is None or total > maximum:
+        return ["No assigned manager has sufficient permission and financial authority for every requested exception."]
+    return []
+
+
+def current_review_context(db, scope):
+    """Request-local hard facts only; no supplier lookup or purchasing writes."""
+    from .preferences import read
+    context = {"spent": db.spent(scope["buyer_id"]), "assignment": db.workspace_authority(scope["buyer_id"], scope["customer_id"])}
+    try:
+        context["policy"] = authority()
+    except HTTPException:
+        context["policy"] = None
+    try:
+        context["preferences"] = read(db, scope)
+    except (ValueError, TypeError):
+        context["preferences"] = None
+    return context
+
+
+def current_review(session, db, *, context=None):
+    """Overlay current hard gates without modifying the reviewed snapshot."""
+    from .preferences import enforce_hard
+    context = context if context is not None else current_review_context(db, session)
+    trusted = context["policy"]
+    spent = D(context["spent"]) / 100
+    remaining = max(D(0), D(trusted["cumulative_limit"]) - spent) if trusted else None
+    blockers = []
+    offer = session.get("offer")
+    if trusted is None:
+        blockers.append("Current trusted purchasing policy is unavailable. No approval or submission can proceed.")
+    elif not policy.parse_time(trusted["expires_at"]) or policy.parse_time(trusted["expires_at"]) <= policy.now():
+        blockers.append("Current purchasing policy has expired. The operator must restore valid authority.")
+    if offer:
+        if not session.get("requester_actor") or not session.get("requester_principal"):
+            blockers.append("Requester identity needs a fresh buyer review. Refresh this older draft.")
+        if offer.get("authority") != trusted:
+            blockers.append("Purchasing policy changed since this quotation. Refresh and review the basket again.")
+        expiry = policy.parse_time(offer.get("expires_at"))
+        if not expiry or expiry <= policy.now():
+            blockers.append("This quotation expired. Refresh prices and availability before approving or submitting.")
+        if fingerprint(offer) != offer.get("fingerprint") or offer.get("requested_requirements") != requirements(session):
+            blockers.append("The basket no longer matches its exact reviewed requirements. Refresh it before continuing.")
+        total = decimal(offer.get("total"))
+        if total is None:
+            blockers.append("The reviewed basket total is not valid.")
+        elif trusted:
+            if total > D(trusted["exception_limit"]):
+                blockers.append("This basket exceeds the current hard per-order purchasing limit.")
+            if total > remaining:
+                blockers.append("Current remaining workspace purchasing allowance is insufficient. Financial approval cannot override this hard cumulative limit.")
+    if context["preferences"] is None:
+        blockers.append("Current mandatory dietary preferences cannot be validated. Ask the operator to restore them.")
+    else:
+        constrained = copy.deepcopy(session)
+        enforce_hard(constrained, db, session, saved=context["preferences"])
+        if requirements(constrained)["items"] != requirements(session)["items"]:
+            blockers.append("Mandatory dietary restrictions or exclusions changed since this quotation. The buyer must refresh and review suitable products.")
+    if session.get("approval", {}).get("reasons"):
+        blockers.extend(assignment_blockers(session, context["assignment"]))
+    return {"blockers": list(dict.fromkeys(blockers)), "cumulative_spent": money(spent), "cumulative_remaining": money(remaining) if remaining is not None else None}
 
 
 def fingerprint(offer):
@@ -159,7 +283,7 @@ def round_sales_units(product, exact):
 
 
 def base_session(scope, mode, use_model=False):
-    return {"id": policy.uid("procurement"), "version": 1, "buyer_id": scope["buyer_id"], "customer_id": scope["customer_id"], "commercial_customer_id": scope.get("commercial_customer_id", scope["customer_id"]), "commercial_context": "Reference pricing uses the authorized example supplier customer. Your separate demonstration workspace is not a Valio Aimo customer contract.", "mode": mode, "use_model": use_model, "created_at": policy.now().isoformat(), "messages": [], "lines": [], "constraints": {"budget": None, "currency": "EUR", "delivery_date": None, "preferences": "balanced"}, "receipt": None, "checkout_pending": False}
+    return {"id": policy.uid("procurement"), "version": 1, "schema_version": 2, "buyer_id": scope["buyer_id"], "customer_id": scope["customer_id"], "buyer_name": scope.get("name", "Buyer"), "workspace_name": scope.get("workspace_name"), "requester_actor": scope.get("actor_id"), "requester_principal": scope.get("principal_id"), "commercial_customer_id": scope.get("commercial_customer_id", scope["customer_id"]), "commercial_context": "Reference pricing uses the authorized example supplier customer. Your separate demonstration workspace is not a Valio Aimo customer contract.", "mode": mode, "use_model": use_model, "created_at": policy.now().isoformat(), "messages": [], "lines": [], "constraints": {"budget": None, "currency": "EUR", "delivery_date": None, "preferences": "balanced"}, "receipt": None, "checkout_pending": False, "budget_exception": None, "decision_history": [], "submitted_at": None, "cancelled": None, "changes_requested": None}
 
 
 def commercial(product, units, evidence, day):
@@ -380,6 +504,9 @@ def quote(session, spent):
     session["offer"] = None
     session["receipt"] = None
     session["rejection"] = None
+    session["changes_requested"] = None
+    session["budget_exception"] = None
+    session["submitted_at"] = None
     session["can_confirm"] = False
     questions = []
     blockers = list(session.get("ambiguities", []))
@@ -570,9 +697,7 @@ def quote(session, spent):
         cart_items.append({"id": pid, "name": p["name"], "sales_unit": p["sales_unit"], "quantity_sales_units": str(units) if units is not None else None, "effective_quantity": str(units) if units is not None else None, "unit": "packages", "quantity_breakdown": breakdown, "unit_price": facts["unit_price"], "line_total": facts["line_total"], "availability": facts["availability"], "delivery_date": facts["delivery_date"], "line_ids": group["line_ids"], "issues": issues, "evidence": facts.get("evidence")})
     budget = decimal(session["constraints"].get("budget"))
     remaining = budget - subtotal if budget is not None and all_priced else None
-    if remaining is not None and remaining < 0:
-        blockers.append(f"Item subtotal exceeds your hard budget by €{money(-remaining)}. Increase the budget explicitly, change products or reduce quantities.")
-        all_valid = False
+    excess = -remaining if remaining is not None and remaining < 0 else D(0)
     snapshot = authority()
     if subtotal > D(snapshot["exception_limit"]):
         blockers.append("Purchasing policy: this basket exceeds the permitted per-order limit. Reduce quantities or ask your workspace manager to review the configured policy. Increasing your budget does not change this limit.")
@@ -584,23 +709,39 @@ def quote(session, spent):
     if not expiry or expiry <= policy.now():
         blockers.append("The demonstration purchasing policy has expired.")
         all_valid = False
+    if excess and not snapshot["budget_exceptions"]:
+        blockers.append("Requested-budget exceptions are prohibited by the trusted policy. Edit the basket or explicitly edit your requested budget.")
+        all_valid = False
+    hard_blockers = list(dict.fromkeys(blockers + [question["prompt"] for question in questions]))
+    if excess:
+        blockers.append(f"Item subtotal exceeds your requested budget by €{money(excess)}. Edit your basket or budget, or request an exact budget exception when all hard checks pass.")
     for i, text in enumerate(blockers):
         options = []
-        if text.startswith("Item subtotal exceeds your hard budget") and baseline is not None:
+        if text.startswith("Item subtotal exceeds your requested budget") and baseline is not None:
             options.append({"id": "raise-item-budget", "label": f"Raise the item budget to €{money(subtotal)}", "action": "set_budget", "payload": {"budget": money(subtotal)}})
         questions.append({"id": f"constraint-{i}", "line_id": None, "prompt": text, "options": options})
-    requires_approval = subtotal > D(snapshot["autonomous_limit"])
-    session["approval"] = {"status": "required" if all_valid and requires_approval else "not_required" if all_valid else "blocked", "threshold": snapshot["autonomous_limit"], "approved": False, "policy": snapshot}
+    reasons = (["requested_budget"] if excess else []) + (["spending_authority"] if subtotal > D(snapshot["autonomous_limit"]) else [])
+    requires_approval = bool(reasons)
+    session["approval"] = {"status": "required" if all_valid and requires_approval else "not_required" if all_valid else "blocked", "threshold": snapshot["autonomous_limit"], "approved": False, "policy": snapshot,
+        "reasons": reasons, "requested_budget": money(budget) if budget is not None else None,
+        "budget_excess": money(excess) if all_priced else None, "explanation": None,
+        "pending": False, "can_request": all_valid and requires_approval, "blockers": hard_blockers,
+        "cumulative_spent": money(D(spent) / 100), "cumulative_remaining": money(max(D(0), D(snapshot["cumulative_limit"]) - D(spent) / 100)),
+        "scope_note": snapshot["cumulative_scope"] + " Pending approvals do not reserve funds; the final transaction rechecks remaining allowance.",
+        "can_decide": False, "decision_blockers": []}
     session["cart"] = {"items": cart_items, "subtotal": money(subtotal) if all_priced else None, "total": None, "unknown_charges": ["Delivery and service charges are outside this item-price simulation; no final commercial charge is quoted."], "budget_remaining": money(remaining) if remaining is not None else None, "currency": "EUR", "price_scope": "tax-inclusive item subtotal"}
     session["clarification_questions"] = questions
     impossible = valid_day and any(not line["candidates"] or all(c["issues"] for c in line["candidates"]) for line in session["lines"])
-    session["order_status"] = "READY_TO_ORDER" if all_valid else "CANNOT_FULFILL" if impossible else "NEEDS_CLARIFICATION"
+    session["order_status"] = "READY_TO_ORDER" if all_valid and not excess else "CANNOT_FULFILL" if impossible else "NEEDS_CLARIFICATION"
+    session["review_state"] = "DRAFT" if not session["lines"] else "READY" if all_valid and not requires_approval else "BLOCKED"
     session["assistant_message"] = "Your complete item-price basket is ready for review." if all_valid else "Review the highlighted choices and requirements to complete your basket."
     if all_valid:
-        offer = {"id": policy.uid("basket"), "buyer_id": session["buyer_id"], "customer_id": session["customer_id"], "session_id": session["id"], "session_version": session["version"], "lines": cart_items, "requested_requirements": requirements(session), "requested_date": day, "total": money(subtotal), "total_cents": int(subtotal * 100), "currency": "EUR", "mode": session["mode"], "status": "approval_required" if requires_approval else "within_mandate", "expires_at": min([policy.now() + timedelta(minutes=5), expiry] + [policy.parse_time(v) for v in deadlines]).isoformat(), "authority": snapshot, "approved": False, "approval": None}
+        offer = {"id": policy.uid("basket"), "schema_version": 2, "buyer_id": session["buyer_id"], "customer_id": session["customer_id"], "requester_actor": session.get("requester_actor"), "requester_principal": session.get("requester_principal"), "session_id": session["id"], "session_version": session["version"], "lines": cart_items, "requested_requirements": requirements(session), "requested_date": day, "total": money(subtotal), "total_cents": int(subtotal * 100), "currency": "EUR", "mode": session["mode"], "status": "approval_required" if requires_approval else "within_mandate", "expires_at": min([policy.now() + timedelta(minutes=5), expiry] + [policy.parse_time(v) for v in deadlines]).isoformat(), "authority": snapshot, "approval_reasons": reasons, "budget_excess": money(excess), "approval_request": None, "approved": False, "approval": None}
         offer["fingerprint"] = fingerprint(offer)
         session["offer"] = offer
         session["can_confirm"] = not requires_approval
+        if excess:
+            session["budget_exception"] = {"status": "available", "original_budget": money(budget), "total": money(subtotal), "excess": money(excess), "explanation": None, "fingerprint": offer["fingerprint"], "version": session["version"]}
     return session
 
 
@@ -608,7 +749,14 @@ def register_routes(app, db, buyer, approver, identity, limit):
     def quote_for(session, scope):
         from .preferences import enforce_hard
         enforce_hard(session, db, scope)
+        session.update(schema_version=2, requester_actor=scope.get("actor_id"), requester_principal=scope.get("principal_id"), buyer_name=scope.get("name", "Buyer"))
+        session["workspace_name"] = scope.get("workspace_name")
         quote(session, db.spent(scope["buyer_id"]))
+        if session.get("approval", {}).get("reasons"):
+            problems = assignment_blockers(session, db.workspace_authority(scope["buyer_id"], scope["customer_id"]))
+            if problems:
+                session["approval"]["can_request"] = False
+                session["approval"]["blockers"] = list(dict.fromkeys(session["approval"]["blockers"] + problems))
 
     def selected_line(product_id, quantity, unit):
         try:
@@ -628,16 +776,102 @@ def register_routes(app, db, buyer, approver, identity, limit):
             fail("not_found", "Purchasing session not found in your customer scope.", 404)
         return result
 
-    def compare_save(old, new):
+    def compare_save(old, new, *, snapshot=None):
         with db.tx() as c:
             row = c.execute("SELECT body FROM aimo_documents WHERE kind=? AND id=? AND buyer_id=?" + (" FOR UPDATE" if db.backend == "postgres" else ""), ("procurement", old["id"], old["buyer_id"])).fetchone()
             if not row or json.loads(row[0]) != old:
                 fail("version_conflict", "This cart changed in another request. Reload it before editing.")
             c.execute("UPDATE aimo_documents SET body=? WHERE kind=? AND id=? AND buyer_id=?", (json.dumps(new), "procurement", old["id"], old["buyer_id"]))
+            if snapshot is not None:
+                c.execute("INSERT INTO aimo_documents(kind,id,buyer_id,body) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING", ("approval_snapshot", snapshot["id"], new["buyer_id"], json.dumps(snapshot)))
 
-    def public(session):
+    def exact_version(session, data):
+        if data.version is not None and data.version != session["version"]:
+            fail("version_conflict", "This request changed. Reload the exact current version before deciding.")
+
+    def history(session, action, scope, reason=None):
+        entry = {"action": action, "actor": scope.get("name", scope["role"]), "actor_id": scope.get("actor_id"), "principal_id": scope.get("principal_id"), "at": policy.now().isoformat(), "reason": reason, "fingerprint": (session.get("offer") or {}).get("fingerprint"), "version": session["version"]}
+        session.setdefault("decision_history", []).append(entry)
+        return entry
+
+    def validate_snapshot(session):
+        offer = session.get("offer")
+        if not offer or offer.get("schema_version") != 2 or not session.get("requester_actor") or not session.get("requester_principal"):
+            fail("buyer_review_required", "Refresh this older draft as buyer before requesting or deciding approval.")
+        if fingerprint(offer) != offer["fingerprint"] or offer.get("authority") != authority() or not policy.parse_time(offer.get("expires_at")) or policy.parse_time(offer["expires_at"]) <= policy.now():
+            fail("stale_offer", "Policy or quotation changed or expired. Refresh and review the basket again.")
+        if offer.get("requested_requirements") != requirements(session) or offer.get("requester_actor") != session["requester_actor"] or offer.get("requester_principal") != session["requester_principal"]:
+            fail("offer_changed", "The basket no longer matches its reviewed requirements. Refresh before continuing.")
+        if session.get("cancelled") or session.get("rejection") or session.get("changes_requested"):
+            fail("decision_closed", "This request is closed. The buyer must revise or refresh before a new request.")
+        return offer
+
+    def revalidate_exact(session, scope):
+        offer = validate_snapshot(session)
+        snapshot = authority()
+        if offer.get("approval_reasons"):
+            problems = assignment_blockers(session, db.workspace_authority(scope["buyer_id"], scope["customer_id"]))
+            if problems:
+                fail("manager_unavailable", " ".join(problems))
+        if offer["total_cents"] + db.spent(scope["buyer_id"]) > int(D(snapshot["cumulative_limit"]) * 100):
+            fail("cumulative_cap", "Remaining workspace allowance is insufficient. Financial approval cannot override this hard limit.")
+        from .preferences import enforce_hard
+        constrained = copy.deepcopy(session)
+        enforce_hard(constrained, db, scope)
+        if requirements(constrained)["items"] != requirements(session)["items"]:
+            fail("preferences_changed", "Dietary restrictions changed. Refresh and review the cart before continuing.")
+        evidence = lookup(session, [line["id"] for line in offer["lines"]])
+        deadlines = [policy.parse_time(offer["expires_at"])]
+        for line in offer["lines"]:
+            try:
+                product = product_facts.normalize(line["id"])
+            except ValueError:
+                fail("catalog_changed", "A product is no longer available. Refresh and review the basket.")
+            exact_units = Fraction(0)
+            fresh = commercial(product, D(line["quantity_sales_units"]), evidence, offer["requested_date"])
+            if fresh["issues"] or fresh["unit_price"] != line["unit_price"] or fresh["line_total"] != line["line_total"]:
+                fail("revalidation_failed", "Price, stock or delivery changed. Refresh the basket and review it again.")
+            for request_line in session["lines"]:
+                if request_line.get("selected_product_id") == product["id"]:
+                    if suitability(product, request_line) or product.get("deleted") or product.get("deposits") or product.get("variable_unit"):
+                        fail("catalog_changed", "Product evidence changed. Refresh and review the basket.")
+                    candidate = next((candidate for candidate in request_line["candidates"] if candidate["id"] == product["id"]), None)
+                    _, pack = item_facts(product, request_line["quantity"], request_line["unit"])
+                    if pack is None or candidate is None or str(pack) != candidate["pack_quantity"]:
+                        fail("catalog_changed", "Pack conversion changed. Refresh and review the basket.")
+                    exact_units += Fraction(D(request_line["quantity"])) / Fraction(pack)
+            if round_sales_units(product, exact_units) != D(line["quantity_sales_units"]):
+                fail("catalog_changed", "Pack order increment changed. Refresh and review the basket.")
+            deadline = policy.parse_time(fresh.get("valid_until"))
+            if deadline is None:
+                fail("invalid_deadline", "Supplier commitment deadline is unknown.")
+            deadlines.append(deadline)
+        return deadlines
+
+    def public(session, scope=None):
         # Commercial raw data remain server-side and in immutable basket evidence.
         result = copy.deepcopy(session)
+        result["original_request"] = next((entry.get("text", "") for entry in result.get("messages", []) if entry.get("role") == "user"), "Purchasing request")
+        result["request_title"] = result["original_request"][:180]
+        if result.get("source_meal_plan"):
+            meal = result["source_meal_plan"]
+            title = str(meal.get("dish") or "Meal ingredient plan")
+            servings = meal.get("request", {}).get("servings")
+            result["request_title"] = title[:180]
+            result["original_request"] = title + (f" for {servings} servings." if servings is not None else ".") + " Exact ingredient quantities and dietary groups are preserved in this saved meal plan."
+        result.setdefault("buyer_name", "Buyer")
+        result.setdefault("workspace_name", None)
+        result.setdefault("decision_history", [])
+        for entry in result["decision_history"]:
+            entry.pop("actor_id", None)
+            entry.pop("principal_id", None)
+        result.setdefault("submitted_at", None)
+        approval = result.get("approval", {})
+        review_context = current_review_context(db, session) if not result.get("receipt") else None
+        if scope and scope.get("role") == "approver":
+            assignment = review_context["assignment"] if review_context else db.workspace_authority(scope["buyer_id"], scope["customer_id"])
+            approval["decision_blockers"] = decision_blockers(session, scope, assignment)
+            approval["can_decide"] = bool(approval.get("pending") and not approval["decision_blockers"])
         current_day = result.get("constraints", {}).get("delivery_date")
         current_notes = []
         for note in result.get("interpretation_notes", []):
@@ -653,10 +887,35 @@ def register_routes(app, db, buyer, approver, identity, limit):
                 candidate.pop("commercial", None)
         if result.get("offer"):
             result["offer"] = {k: result["offer"][k] for k in ["id", "fingerprint", "expires_at", "total", "status", "approved"]}
-            if not result.get("receipt") and policy.parse_time(result["offer"]["expires_at"]) <= policy.now():
-                result["can_confirm"] = False
-                result["order_status"] = "NEEDS_CLARIFICATION"
-                result["assistant_message"] = "This quotation expired. Refresh prices and availability before confirming."
+        review_blockers = []
+        if review_context is not None:
+            review = current_review(session, db, context=review_context)
+            review_blockers = review["blockers"]
+            approval.update(cumulative_spent=review["cumulative_spent"], cumulative_remaining=review["cumulative_remaining"])
+            approval["blockers"] = list(dict.fromkeys(approval.get("blockers", []) + review_blockers))
+            if review_blockers:
+                result.update(can_confirm=False, order_status="NEEDS_CLARIFICATION", review_state="BLOCKED")
+                approval["can_request"] = False
+                if not result.get("rejection") and not result.get("changes_requested") and not result.get("cancelled"):
+                    result["assistant_message"] = review_blockers[0]
+        if result.get("receipt"):
+            result["review_state"] = "SIMULATED_ORDER_SUBMITTED"
+        elif result.get("cancelled"):
+            result["review_state"] = "CANCELLED"
+        elif result.get("changes_requested"):
+            result["review_state"] = "CHANGES_REQUESTED"
+        elif result.get("rejection"):
+            result["review_state"] = "REJECTED"
+        elif review_blockers:
+            result["review_state"] = "BLOCKED"
+        elif approval.get("approved") and result.get("can_confirm"):
+            result["review_state"] = "APPROVED"
+        elif approval.get("pending") and approval.get("can_decide", True):
+            result["review_state"] = "PENDING_APPROVAL"
+        elif approval.get("pending") and result.get("review_state") != "BLOCKED":
+            result["review_state"] = "PENDING_APPROVAL"
+        result.pop("requester_actor", None)
+        result.pop("requester_principal", None)
         result.pop("pending_key", None)
         return result
 
@@ -783,6 +1042,15 @@ def register_routes(app, db, buyer, approver, identity, limit):
         if data.apply_preferences:
             from .preferences import apply_saved
             apply_saved(session, db, scope, apply_priority=False)
+        from .preferences import enforce_hard
+        enforce_hard(session, db, scope)
+        for line in session["lines"]:
+            if line.get("selected_product_id"):
+                product = product_facts.normalize(line["selected_product_id"])
+                issues = suitability(product, line)
+                units, _ = item_facts(product, line["quantity"], line["unit"])
+                if issues or units is None or product.get("deposits") or product.get("variable_unit"):
+                    fail("meal_selection_ineligible", "No verified suitable product selected for " + line["requested_label"] + ". " + " ".join(issues or ["A valid fixed purchasing conversion is required."]), 422)
         quote_for(session, scope)
         db.save("procurement", session["id"], scope["buyer_id"], session)
         db.audit(policy.uid("audit"), scope["buyer_id"], "meal_plan_quoted", {"plan_id": plan["id"], "session_id": session["id"], "selections": data.selections, "recipe_review_required": True})
@@ -790,7 +1058,7 @@ def register_routes(app, db, buyer, approver, identity, limit):
 
     @app.get(PREFIX + "/{id}", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def get(id: str, scope=Depends(identity)):
-        return public(load(id, scope))
+        return public(load(id, scope), scope)
 
     @app.get(PREFIX + "/{id}/verify", response_model=ReceiptVerificationResponse, response_model_exclude_unset=True)
     def verify(id: str, scope=Depends(identity)):
@@ -807,6 +1075,8 @@ def register_routes(app, db, buyer, approver, identity, limit):
     def action(id: str, data: Action, scope=Depends(buyer)):
         limit("procurement-" + scope["buyer_id"], 60)
         old = load(id, scope)
+        if old.get("cancelled"):
+            fail("cart_cancelled", "This basket was cancelled. Reuse it from History to start a fresh draft.")
         if old["version"] != data.version:
             fail("version_conflict", "This cart changed. Reload the current version.")
         if old.get("receipt") or old.get("checkout_pending"):
@@ -875,55 +1145,161 @@ def register_routes(app, db, buyer, approver, identity, limit):
         db.audit(policy.uid("audit"), scope["buyer_id"], "procurement_updated", {"session_id": id, "version": session["version"], "action": data.action, "change": data.model_dump(mode="json", exclude_none=True), "offer_fingerprint": (session.get("offer") or {}).get("fingerprint")})
         return public(session)
 
+    @app.post(PREFIX + "/{id}/request-approval", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
+    def request_approval(id: str, data: ApprovalRequest, scope=Depends(buyer)):
+        limit("request-approval-" + scope["buyer_id"], 30)
+        old = load(id, scope)
+        previous_request = (old.get("offer") or {}).get("approval_request") or {}
+        explanation = (data.explanation or "").strip() or None
+        if old.get("approval", {}).get("pending") and previous_request.get("previous_fingerprint") == data.fingerprint and previous_request.get("explanation") == explanation and previous_request.get("actor_id") == scope.get("actor_id"):
+            return public(old, scope)
+        exact_version(old, data)
+        if old.get("receipt") or old.get("checkout_pending") or old.get("cancelled"):
+            fail("cart_closed", "This basket is confirmed, cancelled or being confirmed.")
+        offer = validate_snapshot(old)
+        if not hmac.compare_digest(offer["fingerprint"], data.fingerprint) or not old.get("approval", {}).get("can_request"):
+            fail("request_blocked", "Request approval only for the exact reviewed basket after resolving all hard blockers.")
+        if old.get("requester_actor") != scope.get("actor_id") or old.get("requester_principal") != scope.get("principal_id"):
+            fail("buyer_review_required", "Refresh the draft as its current buyer before submitting an approval request.")
+        revalidate_exact(old, scope)
+        session = copy.deepcopy(old)
+        session["version"] += 1
+        at = policy.now().isoformat()
+        request = {"submitted_at": at, "explanation": explanation, "actor_id": scope["actor_id"], "principal_id": scope["principal_id"], "reasons": old["approval"]["reasons"], "requested_budget": old["approval"]["requested_budget"], "budget_excess": old["approval"]["budget_excess"], "previous_fingerprint": offer["fingerprint"]}
+        session["offer"].update(id=policy.uid("basket"), session_version=session["version"], approval_request=request)
+        session["offer"]["fingerprint"] = fingerprint(session["offer"])
+        session.update(submitted_at=at, review_state="PENDING_APPROVAL", can_confirm=False)
+        session["approval"].update(pending=True, can_request=False, explanation=explanation)
+        if session.get("budget_exception"):
+            session["budget_exception"].update(status="requested", requested_at=at, explanation=explanation, fingerprint=session["offer"]["fingerprint"], version=session["version"])
+        session["assistant_message"] = "Your exact basket and financial exception request are saved for an independent authorized approver. Nothing has been submitted as an order."
+        entry = history(session, "request_approval", scope, explanation)
+        compare_save(old, session, snapshot=session["offer"])
+        db.audit(policy.uid("audit"), scope["buyer_id"], "basket_approval_requested", {"session_id": id, "snapshot_id": session["offer"]["id"], **entry})
+        return public(session, scope)
+
     @app.post(PREFIX + "/{id}/approve", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def approve(id: str, data: Fingerprint, scope=Depends(approver)):
         old = load(id, scope)
+        exact_version(old, data)
         if old.get("receipt") or old.get("checkout_pending"):
             fail("cart_closed", "This basket is confirmed or being confirmed.")
+        if old.get("cancelled"):
+            fail("cart_cancelled", "This basket was cancelled. Reuse it from History to start a fresh draft.")
         offer = old.get("offer")
         if not offer or offer["status"] != "approval_required" or not hmac.compare_digest(offer["fingerprint"], data.fingerprint):
             fail("not_approvable", "Approve only the exact current basket requiring a spend exception.")
+        reasons = decision_blockers(old, scope, db.workspace_authority(scope["buyer_id"], scope["customer_id"]))
+        if reasons:
+            fail("self_approval_forbidden", " ".join(reasons), 403)
         if (old.get("rejection") or {}).get("fingerprint") == offer["fingerprint"]:
             fail("basket_rejected", "This exact basket was rejected. The buyer must revise or refresh it before another decision.")
         if fingerprint(offer) != offer["fingerprint"] or offer["authority"] != authority() or policy.parse_time(offer["expires_at"]) <= policy.now():
             fail("stale_offer", "Refresh the basket and obtain a new exact approval.")
         if offer.get("approved"):
-            return public(old)
+            return public(old, scope)
+        if not old.get("approval", {}).get("pending") or not offer.get("approval_request"):
+            fail("approval_not_requested", "The buyer must explicitly request approval for this exact basket first.")
+        revalidate_exact(old, scope)
         session = copy.deepcopy(old)
         session["version"] += 1
         session["offer"]["approved"] = True
-        session["offer"]["approval"] = {"approver": scope["name"], "approver_role": "approver", "fingerprint": offer["fingerprint"], "approved_at": policy.now().isoformat(), "expires_at": offer["expires_at"]}
-        session["approval"].update(status="approved", approved=True)
+        session["offer"]["approval"] = {"approver": scope["name"], "approver_role": "approver", "actor_id": scope["actor_id"], "principal_id": scope["principal_id"], "fingerprint": offer["fingerprint"], "approved_at": policy.now().isoformat(), "expires_at": offer["expires_at"], "session_version": offer["session_version"], "decision_version": session["version"], "covered_reasons": offer["approval_reasons"]}
+        session["approval"].update(status="approved", approved=True, pending=False, can_request=False)
         session["can_confirm"] = True
+        session["review_state"] = "APPROVED"
+        session["order_status"] = "READY_TO_ORDER"
+        session["clarification_questions"] = [question for question in session["clarification_questions"] if not question["prompt"].startswith("Item subtotal exceeds your requested budget")]
+        if session.get("budget_exception"):
+            session["budget_exception"]["status"] = "approved"
+        session["assistant_message"] = "This exact basket and its recorded financial exceptions are approved. The buyer must explicitly submit the simulation before the quotation expires."
+        history(session, "approve", scope)
         compare_save(old, session)
         db.audit(policy.uid("audit"), scope["buyer_id"], "basket_approved", session["offer"]["approval"])
-        return public(session)
+        return public(session, scope)
 
     @app.post(PREFIX + "/{id}/reject", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def reject_basket(id: str, data: Rejection, scope=Depends(approver)):
         limit("reject-" + scope["buyer_id"], 30)
         old = load(id, scope)
+        exact_version(old, data)
         if old.get("receipt") or old.get("checkout_pending"):
             fail("cart_closed", "This basket is confirmed or being confirmed.")
         offer = old.get("offer")
         if not offer or offer["status"] != "approval_required" or not hmac.compare_digest(offer["fingerprint"], data.fingerprint):
             fail("not_rejectable", "Reject only the exact current basket requiring a spend exception.")
-        if fingerprint(offer) != offer["fingerprint"] or offer["authority"] != authority():
+        reasons = decision_blockers(old, scope, db.workspace_authority(scope["buyer_id"], scope["customer_id"]))
+        if reasons:
+            fail("self_approval_forbidden", " ".join(reasons), 403)
+        if fingerprint(offer) != offer["fingerprint"]:
             fail("stale_offer", "The basket changed. Reload it before making a decision.")
         if (old.get("rejection") or {}).get("fingerprint") == offer["fingerprint"]:
-            return public(old)
+            return public(old, scope)
         if offer.get("approved"):
             fail("decision_recorded", "This exact basket was already approved. The buyer must revise it before a different decision.")
+        if not old.get("approval", {}).get("pending") or old.get("changes_requested") or old.get("cancelled"):
+            fail("approval_not_requested", "This basket has no pending approval request.")
         session = copy.deepcopy(old)
         session["version"] += 1
         session["rejection"] = {"approver": scope["name"], "approver_role": "approver", "fingerprint": offer["fingerprint"], "rejected_at": policy.now().isoformat(), "reason": (data.reason or "").strip() or None}
-        session["approval"].update(status="rejected", approved=False)
+        session["approval"].update(status="rejected", approved=False, pending=False, can_request=False)
         session["can_confirm"] = False
         session["order_status"] = "NEEDS_CLARIFICATION"
+        session["review_state"] = "REJECTED"
+        if session.get("budget_exception"):
+            session["budget_exception"]["status"] = "rejected"
         session["assistant_message"] = "The approver rejected this basket. Review the decision, then revise or refresh the basket before requesting a new approval."
+        history(session, "reject", scope, session["rejection"]["reason"])
         compare_save(old, session)
         db.audit(policy.uid("audit"), scope["buyer_id"], "basket_rejected", {"session_id": id, **session["rejection"]})
-        return public(session)
+        return public(session, scope)
+
+    @app.post(PREFIX + "/{id}/request-changes", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
+    def request_changes(id: str, data: ChangesRequest, scope=Depends(approver)):
+        old = load(id, scope)
+        exact_version(old, data)
+        if old.get("receipt") or old.get("checkout_pending") or old.get("cancelled"):
+            fail("cart_closed", "This basket is closed or being confirmed.")
+        offer = old.get("offer") or {}
+        if not hmac.compare_digest(offer.get("fingerprint", ""), data.fingerprint) or not old.get("approval", {}).get("pending"):
+            fail("approval_not_requested", "Request changes only for the exact pending basket.")
+        if fingerprint(offer) != offer.get("fingerprint"):
+            fail("stale_offer", "The exact basket or policy changed. Reload and request a fresh buyer review.")
+        reasons = decision_blockers(old, scope, db.workspace_authority(scope["buyer_id"], scope["customer_id"]))
+        if reasons:
+            fail("self_approval_forbidden", " ".join(reasons), 403)
+        reason = data.reason.strip()
+        if not reason:
+            fail("reason_required", "Describe the changes required from the buyer.", 422)
+        session = copy.deepcopy(old)
+        session["version"] += 1
+        session["changes_requested"] = {"approver": scope["name"], "fingerprint": offer["fingerprint"], "reason": reason, "at": policy.now().isoformat()}
+        session["approval"].update(status="changes_requested", approved=False, pending=False, can_request=False)
+        session.update(can_confirm=False, order_status="NEEDS_CLARIFICATION", review_state="CHANGES_REQUESTED", assistant_message="The approver requested changes. Edit the basket, refresh it and submit a new exact approval request.")
+        if session.get("budget_exception"):
+            session["budget_exception"]["status"] = "changes_requested"
+        entry = history(session, "request_changes", scope, reason)
+        compare_save(old, session)
+        db.audit(policy.uid("audit"), scope["buyer_id"], "basket_changes_requested", {"session_id": id, **entry})
+        return public(session, scope)
+
+    @app.post(PREFIX + "/{id}/cancel", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
+    def cancel(id: str, data: Cancellation, scope=Depends(buyer)):
+        old = load(id, scope)
+        exact_version(old, data)
+        if old.get("receipt") or old.get("checkout_pending"):
+            fail("cart_closed", "A confirmed or submitting simulation cannot be cancelled here.")
+        if old.get("cancelled"):
+            return public(old, scope)
+        session = copy.deepcopy(old)
+        session["version"] += 1
+        session["cancelled"] = {"actor": scope["name"], "at": policy.now().isoformat(), "reason": (data.reason or "").strip() or None}
+        session["approval"].update(status="cancelled", approved=False, pending=False, can_request=False)
+        session.update(can_confirm=False, review_state="CANCELLED", order_status="NEEDS_CLARIFICATION", assistant_message="This draft was cancelled. Its history is preserved and no order or payment was made.")
+        entry = history(session, "cancel", scope, session["cancelled"]["reason"])
+        compare_save(old, session)
+        db.audit(policy.uid("audit"), scope["buyer_id"], "basket_cancelled", {"session_id": id, **entry})
+        return public(session, scope)
 
     @app.post(PREFIX + "/{id}/confirm", response_model=ProcurementSessionResponse, response_model_exclude_unset=True)
     def confirm(id: str, data: Fingerprint, key: str = Header(alias="Idempotency-Key", min_length=8, max_length=128), scope=Depends(buyer)):
@@ -937,46 +1313,18 @@ def register_routes(app, db, buyer, approver, identity, limit):
             restored.update(receipt=prior, can_confirm=False, checkout_pending=False, order_status="SIMULATED_ORDER_CONFIRMED")
             compare_save(old, restored)
             return public(restored)
+        exact_version(old, data)
         if not old["can_confirm"] or fingerprint(offer) != offer["fingerprint"] or offer["authority"] != authority() or policy.parse_time(offer["expires_at"]) <= policy.now():
             fail("confirmation_blocked", "Resolve constraints and obtain any required approval for an unexpired basket.")
         if old.get("checkout_pending") and old.get("pending_key") != key:
             fail("checkout_pending", "Retry confirmation with its original idempotency key.")
-        from .preferences import enforce_hard
-        constrained = copy.deepcopy(old)
-        enforce_hard(constrained, db, scope)
-        if requirements(constrained)["items"] != requirements(old)["items"]:
-            fail("preferences_changed", "Dietary restrictions changed. Refresh and review the cart before confirming.")
-        # Revalidate exact SKU quantities and commercial facts before atomically
-        # consuming shared synthetic spend. No new product choice happens here.
-        evidence = lookup(old, [line["id"] for line in offer["lines"]])
-        deadlines = [policy.parse_time(offer["expires_at"])]
-        for line in offer["lines"]:
-            product = product_facts.normalize(line["id"])
-            exact_units = Fraction(0)
-            fresh = commercial(product, D(line["quantity_sales_units"]), evidence, offer["requested_date"])
-            if fresh["issues"] or fresh["unit_price"] != line["unit_price"] or fresh["line_total"] != line["line_total"]:
-                fail("revalidation_failed", "Price, stock or delivery changed. Refresh the basket and review it again.")
-            # Current catalog suitability and pack sizes must match the reviewed facts.
-            for request_line in old["lines"]:
-                if request_line.get("selected_product_id") == product["id"]:
-                    if suitability(product, request_line) or product.get("deleted") or product.get("deposits") or product.get("variable_unit"):
-                        fail("catalog_changed", "Product evidence changed. Refresh and review the basket.")
-                    old_candidate = next(c for c in request_line["candidates"] if c["id"] == product["id"])
-                    _, pack = item_facts(product, request_line["quantity"], request_line["unit"])
-                    if pack is None or str(pack) != old_candidate["pack_quantity"]:
-                        fail("catalog_changed", "Pack conversion changed. Refresh and review the basket.")
-                    exact_units += Fraction(D(request_line["quantity"])) / Fraction(pack)
-            if round_sales_units(product, exact_units) != D(line["quantity_sales_units"]):
-                fail("catalog_changed", "Pack order increment changed. Refresh and review the basket.")
-            deadline = policy.parse_time(fresh.get("valid_until"))
-            if deadline is None:
-                fail("invalid_deadline", "Supplier commitment deadline is unknown.")
-            deadlines.append(deadline)
+        deadlines = revalidate_exact(old, scope)
         pending = copy.deepcopy(old)
         pending.update(checkout_pending=True, pending_key=key)
         pending["version"] += 1
         compare_save(old, pending)
         receipt = {"id": policy.uid("sim-basket"), "offer_id": offer["id"], "buyer_id": scope["buyer_id"], "customer_id": scope["customer_id"], "status": "simulated", "simulated": True, "items": offer["lines"], "total": offer["total"], "currency": "EUR", "price_scope": "tax-inclusive item subtotal; other charges excluded", "requested_date": offer["requested_date"], "mode": offer["mode"], "fingerprint": offer["fingerprint"], "approval": offer.get("approval"), "idempotent_replay": False, "notice": "Simulated order only. No supplier order, reservation, invoice or payment was created."}
+        receipt["budget_exception"] = copy.deepcopy(old.get("budget_exception"))
         try:
             receipt = db.commit(offer, key, receipt, int(D(authority()["cumulative_limit"]) * 100), min(deadlines).isoformat())
         except Exception:

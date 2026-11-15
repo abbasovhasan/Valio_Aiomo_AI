@@ -311,10 +311,22 @@ class AuthorityResponse(ResponseModel):
 
 
 class ApprovalStateResponse(ResponseModel):
-    status: Literal["required", "not_required", "blocked", "approved", "rejected"]
+    status: Literal["required", "not_required", "blocked", "approved", "rejected", "changes_requested", "cancelled"]
     threshold: MoneyText
     approved: bool
     policy: AuthorityResponse
+    reasons: list[Literal["requested_budget", "spending_authority"]] = Field(default_factory=list)
+    requested_budget: MoneyText | None = None
+    budget_excess: MoneyText | None = None
+    explanation: str | None = None
+    pending: bool = False
+    can_request: bool = False
+    blockers: list[str] = Field(default_factory=list)
+    cumulative_spent: MoneyText | None = None
+    cumulative_remaining: MoneyText | None = None
+    scope_note: str | None = None
+    can_decide: bool = False
+    decision_blockers: list[str] = Field(default_factory=list)
 
 
 class OfferResponse(ResponseModel):
@@ -332,6 +344,10 @@ class ExactApprovalResponse(ResponseModel):
     fingerprint: FingerprintText
     approved_at: TimestampText
     expires_at: TimestampText
+    actor_id: str | None = None
+    principal_id: str | None = None
+    session_version: int | None = None
+    covered_reasons: list[str] | None = None
 
 
 class ExactRejectionResponse(ResponseModel):
@@ -340,6 +356,26 @@ class ExactRejectionResponse(ResponseModel):
     fingerprint: FingerprintText
     rejected_at: TimestampText
     reason: str | None
+
+
+class BudgetExceptionResponse(ResponseModel):
+    status: Literal["available", "requested", "approved", "rejected", "changes_requested"]
+    original_budget: MoneyText
+    total: MoneyText
+    excess: MoneyText
+    explanation: str | None
+    fingerprint: FingerprintText
+    version: int = Field(ge=1)
+    requested_at: TimestampText | None = None
+
+
+class DecisionHistoryResponse(ResponseModel):
+    action: str
+    actor: str
+    at: TimestampText
+    reason: str | None = None
+    fingerprint: FingerprintText | None = None
+    version: int | None = None
 
 
 class SimulatedReceiptResponse(ResponseModel):
@@ -360,6 +396,7 @@ class SimulatedReceiptResponse(ResponseModel):
     idempotent_replay: bool
     notice: str
     created_at: TimestampText
+    budget_exception: BudgetExceptionResponse | None = None
 
     @field_validator("simulated", mode="before")
     @classmethod
@@ -400,6 +437,14 @@ class ProcurementSessionResponse(ResponseModel):
     source_recipe: dict[str, JsonValue] | None = None
     last_selected_line_id: str | None = None
     rejection: ExactRejectionResponse | None = None
+    budget_exception: BudgetExceptionResponse | None = None
+    review_state: Literal["DRAFT", "BLOCKED", "PENDING_APPROVAL", "CHANGES_REQUESTED", "REJECTED", "APPROVED", "READY", "SIMULATED_ORDER_SUBMITTED", "CANCELLED"] | None = None
+    buyer_name: str | None = None
+    workspace_name: str | None = None
+    original_request: str | None = None
+    request_title: str | None = None
+    submitted_at: TimestampText | None = None
+    decision_history: list[DecisionHistoryResponse] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def ready_claim_has_complete_records(self):

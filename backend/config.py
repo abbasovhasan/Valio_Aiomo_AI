@@ -33,6 +33,9 @@ MODEL = os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b")
 BUYER = "buyer-hotel-aurora"
 CUSTOMER = "hotel-aurora-demo"
 APPROVER = "Leena Koski · procurement manager"
+MANAGER_PRINCIPAL = "access_code:approver"
+QUICK_DEMO_BUYER = "buyer-quick-demo-v1"
+QUICK_DEMO_CUSTOMER = "customer-quick-demo-v1"
 MANDATE = {
     "id": "mandate-aurora-v1",
     "buyer_id": BUYER,
@@ -91,12 +94,13 @@ def spend_limits(environ):
 
 
 MANDATE.update(spend_limits(os.environ))
+MANDATE["allow_budget_exceptions"] = os.getenv("AIMO_ALLOW_BUDGET_EXCEPTIONS", "true").strip().casefold() == "true"
 MANDATE["policy_configuration"] = (
     "Operator-configured server environment; fixed until restart. Buyer text cannot change authority."
 )
 MANDATE["commercial_journey"] = {
     "channel": "webshop",
     "account": "Synthetic contracted B2B customer; no real contract or credit check performed.",
-    "payment": "Usually invoiced after delivery, according to the worker interview; actual contract terms govern.",
+    "payment": "Payment and invoice terms are not configured or verified for this demonstration account.",
     "simulation": "This app issues a simulated receipt only. It never issues an invoice or takes payment.",
 }

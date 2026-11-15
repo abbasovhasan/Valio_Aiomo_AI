@@ -6,8 +6,9 @@ Guide on this PC:
 /home/hasan/Documents/ChatGPT/Valio_Aiomo_AI/docs/WEBSITE_CHECK_GUIDE.txt
 
 This is a review checklist, not a claim that every device or example passed.
-Current refinement evidence is in ROLE_DEMO_REFINEMENT_QA.md beside this guide.
-PRODUCT_REFINEMENT_REPORT.md records the current deployed build and checks.
+Current purchasing evidence is in SECURE_PURCHASING_ACCEPTANCE.md beside this
+guide. SECURE_PURCHASING_PERFORMANCE.md records measurements and hosting costs.
+PRODUCT_REFINEMENT_REPORT.md preserves the preceding details/comparison release.
 FINAL_QA_REPORT.md also preserves clearly labelled earlier-release evidence.
 Reload once if an already-open tab still shows the previous interface.
 All orders are simulated. No supplier order, reservation, invoice or payment
@@ -79,8 +80,8 @@ Use quantity "Update", replace a product and remove a request. Totals and
 package surplus should update. A missing product or unsupported conversion
 must produce an honest question or blocker.
 
-Use a very low budget, then correct it explicitly. A hard customer budget cannot
-be waived by an Approver. Date changes must update quotation and final review;
+Use a low requested budget. A permitted exact budget exception can be requested
+explicitly in Review order; it must not silently raise your original budget. Date changes must update quotation and final review;
 unknown or later availability must not become a promised delivery.
 
 The cart summarizes requested delivery and maximum budget. "Edit requirements"
@@ -148,8 +149,8 @@ unknown; availability is not a reservation.
 6. COMPARE ANY TWO OR THREE AND OPEN DETAILS
 
 On Smart order or Products, tick "Compare" on any two actual products. Selecting
-must not immediately open a dialog or change the cart. Click "Compare (2)" to
-open it; add a third to try "Compare (3)". Products can come from different
+must not immediately open a dialog or change the cart. Click "Compare items" beside the alternatives count to open it. Products shows
+"Compare items (2)" in its selection bar; add a third to compare three. Products can come from different
 categories or later searches/pages. A fourth should offer explicit "Replace"
 choices and Cancel rather than silently dropping an earlier choice.
 
@@ -207,33 +208,53 @@ same cart; an explicit restriction in the request must remain.
 
 8. PASS AN EXACT REQUEST BETWEEN BUYER AND APPROVER
 
-Use the quick Buyer card for this scenario. Create a valid basket above the
-current autonomous threshold and within its approval/cumulative ceilings. With
-normal authored defaults, these are €1,400 /€2,500 /€6,000. A suitable 1,500-L
-milk example may require approval, but the actual SKU/quote decides the subtotal.
-Do not assume every product or live price has the same cost.
+Use two separate browsers/browser profiles for a buyer and independent manager.
+Switching roles in the buyer's browser must NOT authorize its own request.
+The shared quick Buyer/Approver pair is useful for a demo; private buyers use
+"Approve this workspace" and the separately held manager code in a second
+browser. A workspace ID alone grants no authority. Shared codes simulate actors,
+not real enterprise employee identity across devices.
 
-The Buyer should see "Purchasing approval needed" and be unable to approve it.
-Switch role to Approver. In "Approvals", click "Review request" on that exact
-basket. Review products, quantities, date, subtotal, expiry and product details.
+Create a valid basket above its requested budget or buyer authority, within all
+hard limits. With authored installation defaults, buyer authority is €1,400,
+per-order ceiling €2,500 and lifetime workspace simulated allowance €6,000.
+These are simulator settings, not official Valio limits or supplier bank funds.
+Raising requested budget must not increase authority or replenish allowance.
 
-Try "Decline basket" with an optional reason. Switch to Buyer and use
-"Refresh status": the reason/revision path should appear and confirmation stay
-blocked. Refresh status is read-only; it does not create a new quote or order.
+Choose "Review order". Inspect original request, chosen products, requested and
+rounded quantities, source, delivery, dietary evidence and cost scope. Expand
+"Workspace policy & allowance" for cumulative details. Opening review does not
+re-quote or submit. Back to cart must retain unsent text, products, filters,
+sorting and optional comparisons.
 
-Revise the basket deliberately. Switch to Approver, review the new exact version
-and "Approve basket". Switch back to Buyer and read status again. Changing
-quantity, product, date or price must invalidate stale approval. Expired quotes
-must be refreshed by Buyer before a fresh decision. Approver cannot bypass a
-hard budget, missing stock, unknown required evidence or another hard blocker.
+Example: original requested budget €800, verified basket €836. Review should
+show exactly €36 extra, retain €800, and offer "Request approval" when permitted.
+A short explanation is optional. Only clicking that action creates a pending
+queue entry. Direct confirmation remains unavailable. Financial approval cannot
+bypass missing stock, dietary evidence, invalid conversion or hard allowance.
 
-This test can stop with approval: no high-value confirmation is necessary.
-Demo re-entry must not reset spending or the saved decision history.
+In the separate eligible Approver browser, open that request from Approvals.
+Check buyer/workspace, title, submission time, complete basket, €800/€836/€36,
+explanation and exact reasons. Read-only comparison must not change the basket.
+Try "Request changes" with a note, then Buyer "Refresh status"; edit/re-quote
+and request fresh approval. "Decline basket" records rejection and requires a
+fresh buyer revision. "Approve exact basket" approves only the reviewed version.
+
+Approval must not create an order or increase future authority/budgets. The
+buyer refreshes status, reviews Approved, then decides whether to confirm the
+simulation. Product, quantity, date, price, policy or mandatory-rule changes must
+invalidate/stop stale approval. Expired quotes require buyer refresh. Authorized
+change requests/declines remain available for recovery from hard blockers.
+
+This scenario can stop after approval. No high-value confirmation is necessary.
+Pending approval reserves no funds or stock. Competing submissions consume the
+same lifetime allowance atomically; a later basket can be blocked. Re-entering
+or switching roles must never reset spending or audit history.
 
 
 9. REVIEW ONE SMALL SIMULATION ONLY WHEN DESIRED
 
-For a complete permitted small cart, choose "Review & confirm" and inspect its
+For a complete permitted small cart, choose "Review order" and inspect its
 exact items, quantities, date and subtotal. "Confirm simulated order" records a
 simulation only. Repeated requests with the same key must not create duplicates.
 
@@ -281,8 +302,11 @@ Expand "Dietary requirements" or "Ingredient preferences" when needed.
 
 Generate the plan and inspect "Your ingredients". Use "Add ingredient", edit an
 ingredient search, grams per serving and "Use for", or remove a row. Recalculate
-after changes; dirty quantities must not transfer as an unchanged plan. A valid
-selected SKU should survive unrelated edits through its ingredient/cohort ID.
+after changes; dirty quantities must not transfer as an unchanged plan. Selections are not displayed as compliant while requirements are dirty. After
+recalculation, only a still-eligible selected SKU may survive through its
+ingredient/cohort ID. Incompatible, missing-evidence and invalid-conversion
+choices must stay disabled/unselected; unresolved rows say "No verified suitable
+product selected". A product name alone never verifies dietary suitability.
 
 For the example, try 40 servings, 8 vegetarian, 4 gluten-free and 2 needing both.
 Expected groups: 30 /2 /6 /2, counted once each. Check exact displayed kilograms.
@@ -304,7 +328,8 @@ access codes are still available where that legacy demonstration is intended.
 12. FINISH THE DESKTOP, MOBILE AND KEYBOARD REVIEW
 
 Check major screens at 320, 375, 390 and 430 px, then tablet/desktop. Inspect
-sign-in/registration, Buyer, Approver, Products, product details, preferences,
+the A4TB header/home link and compact browser icon, sign-in/registration, Buyer,
+Approver, Products, product details, preferences,
 History, meal planner, cart and review/result. On a narrow screen, use the mobile
 Cart control; it should open a usable dialog instead of a cramped sidebar.
 

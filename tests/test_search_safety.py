@@ -51,10 +51,11 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(catalog, 'load_catalog', lambda: rows)
     monkeypatch.setattr(catalog, 'supplemental', lambda: {})
     store = Store(tmp_path / 'search-safety.sqlite', postgres=False)
+    store.migrate_workspace_authority()
     app = FastAPI()
 
     def identity(x_role: str = Header(default='buyer')):
-        return {'role': x_role, 'name': 'Authored safety ' + x_role, 'buyer_id': BUYER, 'customer_id': CUSTOMER}
+        return {'role': x_role, 'name': 'Authored safety ' + x_role, 'buyer_id': BUYER, 'customer_id': CUSTOMER, 'actor_id': 'safety-actor-' + x_role, 'principal_id': 'access_code:' + x_role}
 
     def buyer(scope=Depends(identity)):
         if scope['role'] != 'buyer':

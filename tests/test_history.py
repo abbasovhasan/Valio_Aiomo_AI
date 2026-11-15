@@ -28,7 +28,7 @@ def env(tmp_path, monkeypatch):
     def buyer(x_buyer: str = Header(default=BUYER), x_role: str = Header(default="buyer")):
         if x_role != "buyer":
             raise HTTPException(403)
-        return {"role": "buyer", "name": "History test", "buyer_id": x_buyer,
+        return {"role": "buyer", "name": "History test", "buyer_id": x_buyer, "actor_id": "history-actor-" + x_buyer, "principal_id": "history-principal-" + x_buyer,
                 "customer_id": CUSTOMER if x_buyer == BUYER else "customer-" + x_buyer}
 
     procurement.register_routes(app, store, buyer, buyer, buyer, lambda *args: None)

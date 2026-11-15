@@ -575,21 +575,14 @@ function App() {
         <a
           href="#"
           className="brand"
-          aria-label="A4TB Valio Aimo home"
+          aria-label="A4TB home — Valio Aimo challenge prototype"
           onClick={(e) => {
             e.preventDefault();
             setTab(session.role === "approver" ? "approvals" : "purchase");
           }}
         >
-          <span className="brand-mark">
-            a<span>i</span>mo<span className="brand-dot">↗</span>
-          </span>
-          <span className="brand-divider" />
-          <span className="brand-sub">
-            A4TB
-            <br />
-            VALIO AIMO
-          </span>
+          <img className="brand-logo" src="/brand/a4tb-logo.svg" alt="A4TB" width="148" height="40" />
+          <span className="brand-context">Valio Aimo challenge</span>
         </a>
         <nav
           aria-label="Main navigation"
@@ -1566,7 +1559,7 @@ function App() {
       </main>
       <footer className="page-footer">
         <span>
-          A4TB · VALIO AIMO
+          A4TB · Valio Aimo challenge
         </span>
         <div>
           <span className="footer-lock">

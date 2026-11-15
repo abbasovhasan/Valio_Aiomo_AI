@@ -59,7 +59,7 @@ def test_session_cookie_vs_remember_cookie_and_restart_persistence(env):
     store, app = env
     client = TestClient(app, base_url="https://testserver")
     first = register(client)
-    cookie = first.headers["set-cookie"]
+    cookie = next(value for value in first.headers.get_list("set-cookie") if value.startswith("aimo_session="))
     assert "HttpOnly" in cookie and "SameSite=strict" in cookie and "Secure" in cookie
     assert "Max-Age" not in cookie and "expires=" not in cookie.lower()
     expiry = datetime.fromisoformat(first.json()["session_expires_at"]).timestamp()
@@ -179,6 +179,9 @@ def test_registered_workspace_exact_approval_and_receipt_stay_tenant_scoped(env,
     assert result.status_code == 200, result.text
     cart = result.json()
     assert cart["approval"]["status"] == "required" and not cart["can_confirm"]
+    requested = owner.post("/api/v1/procurement/sessions/" + cart["id"] + "/request-approval", json={"version": cart["version"], "fingerprint": cart["offer"]["fingerprint"]})
+    assert requested.status_code == 200, requested.text
+    cart = requested.json()
     path = "/api/v1/procurement/sessions/" + cart["id"]
     exact = {"fingerprint": cart["offer"]["fingerprint"]}
     assert owner.post(path + "/approve", json=exact).status_code == 403

@@ -103,14 +103,14 @@ def read(db, scope):
     return PreferenceResponse.model_validate(stored or {}).model_dump()
 
 
-def enforce_hard(session, db, scope):
+def enforce_hard(session, db, scope, *, saved=None):
     """Rebuild effective restrictions from explicit intent and current defaults.
 
     Explicit and saved requirements need separate provenance: disabling a saved
     default can remove only that default, never a customer's requested allergy.
     Legacy lines without provenance retain their restrictions conservatively.
     """
-    saved = read(db, scope)
+    saved = read(db, scope) if saved is None else saved
     for line in session["lines"]:
         for requested, effective, defaults in [
             ("requested_dietary", "dietary", "dietary_restrictions"),

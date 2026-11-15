@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from . import catalog, policy, upstream, planning
 from .config import ROOT, BUYER, CUSTOMER, MANDATE, APPROVER, access_codes, MODEL
 from .store import Store, StoreError
-from .auth import Auth, CodeLogin as Login, PasswordLogin, Registration, DemoLogin, DemoConfiguration, SessionIdentity, demo_enabled
+from .auth import Auth, CodeLogin as Login, PasswordLogin, Registration, DemoLogin, DemoConfiguration, SessionIdentity, demo_enabled, ACTOR_SECONDS
 
 
 class Strict(BaseModel):
@@ -58,7 +58,16 @@ def create_app(store=None):
 
     @app.middleware("http")
     async def response_safety_headers(request: Request, call_next):
+        started = time.perf_counter()
         response = await call_next(request)
+        # Handler/response-header time only. Hosting queue, transport, body
+        # delivery and the outer durable-volume commit are measured separately.
+        response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - started) * 1000:.3f}"
+        actor_token = getattr(request.state, "new_actor_token", None)
+        if actor_token:
+            response.set_cookie("aimo_actor", actor_token, httponly=True, samesite="strict", secure=request.url.scheme == "https" or os.getenv("AIMO_SECURE_COOKIES") == "1", max_age=ACTOR_SECONDS)
+        if getattr(request.state, "auth_state_changed", False):
+            response.headers["X-Aimo-State-Changed"] = "1"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["X-Frame-Options"] = "DENY"
@@ -157,6 +166,8 @@ def create_app(store=None):
                     "message": "Customer policy changed. Refresh the offer and obtain any required new approval.",
                 },
             )
+        if not o.get("requester_actor") or not o.get("requester_principal"):
+            raise HTTPException(409, detail={"code": "buyer_review_required", "message": "Refresh this older unconfirmed offer as buyer before continuing. Existing receipts remain readable."})
 
     def event(kind, title, detail, status="info", evidence=None):
         return {
@@ -184,8 +195,8 @@ def create_app(store=None):
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
-        if request.url.path.startswith("/api/v1/auth/") or request.url.path == "/api/v1/session":
-            # Pydantic's default error body can echo a rejected password/code.
+        if request.url.path.startswith(("/api/v1/auth/", "/api/v1/procurement/")) or request.url.path == "/api/v1/session":
+            # Do not echo credentials or malformed purchasing text in errors.
             errors = [{key: value for key, value in error.items() if key not in ["input", "ctx"]} for error in exc.errors()]
             return JSONResponse(status_code=422, content={"detail": errors})
         return await request_validation_exception_handler(request, exc)
@@ -446,6 +457,8 @@ def create_app(store=None):
         valid.sort(key=lambda o: (o["status"] != "within_mandate", Decimal(o["total"])))
         recommended = valid[0]["id"] if valid else None
         for o in offers:
+            o.update(requester_actor=s.get("actor_id"), requester_principal=s.get("principal_id"))
+            o["fingerprint"] = policy.digest(o)
             save_offer(o)
             events.append(
                 event(
@@ -539,6 +552,14 @@ def create_app(store=None):
     def approve(offer_id: str, data: ApprovalInput, s=Depends(approver)):
         o = load_offer(offer_id, s)
         current_policy(o)
+        if not o.get("requester_actor") or not o.get("requester_principal"):
+            raise HTTPException(409, detail={"code": "buyer_review_required", "message": "Refresh this older offer as buyer before independent approval."})
+        if not s.get("actor_id") or not s.get("principal_id") or s["actor_id"] == o["requester_actor"] or s["principal_id"] == o["requester_principal"]:
+            raise HTTPException(403, detail={"code": "self_approval_forbidden", "message": "Switching roles cannot approve your own request. Use a separate authorized manager browser/session."})
+        from .procurement import decision_blockers
+        eligibility = decision_blockers({"customer_id": o["customer_id"], "requester_actor": o["requester_actor"], "requester_principal": o["requester_principal"], "approval": {"reasons": ["spending_authority"]}, "offer": o}, s, db.workspace_authority(s["buyer_id"], s["customer_id"]))
+        if eligibility:
+            raise HTTPException(403, detail={"code": "manager_authority", "message": " ".join(eligibility)})
         if o["status"] != "approval_required":
             raise HTTPException(
                 409,
@@ -567,6 +588,8 @@ def create_app(store=None):
         o["approval"] = {
             "approver": s["name"],
             "approver_role": s["role"],
+            "actor_id": s["actor_id"],
+            "principal_id": s["principal_id"],
             "fingerprint": o["fingerprint"],
             "approved_at": policy.now().isoformat(),
             "expires_at": o["expires_at"],

@@ -18,13 +18,12 @@ from urllib.parse import urlparse
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .config import APPROVER, BUYER, CUSTOMER, access_codes
+from .config import APPROVER, BUYER, CUSTOMER, QUICK_DEMO_BUYER, QUICK_DEMO_CUSTOMER, access_codes
 
 N, R, P = 32768, 8, 3
 SESSION_SECONDS = 8 * 3600
 REMEMBER_SECONDS = 30 * 24 * 3600
-QUICK_DEMO_BUYER = "buyer-quick-demo-v1"
-QUICK_DEMO_CUSTOMER = "customer-quick-demo-v1"
+ACTOR_SECONDS = 365 * 24 * 3600
 
 
 def demo_enabled():
@@ -81,6 +80,8 @@ class SessionIdentity(BaseModel):
     auth_method: Literal["access_code", "password", "demo"]
     demo_workspace: bool
     quick_demo: bool = False
+    actor_id: str
+    principal_id: str
     remember_me: bool
     session_expires_at: str
 
@@ -169,19 +170,69 @@ class Auth:
     def public(record):
         return {**{key: value for key, value in record.items() if key != "expires"}, "commercial_customer_id": CUSTOMER, "commercial_account_note": "Pricing uses the shared synthetic Valio sandbox customer. Registration creates a private app workspace, not a supplier customer contract."}
 
+    def bind_actor(self, request, expected=None):
+        """Opaque browser lineage is correlation, never an authentication token.
+
+        It survives logout/role changes to block same-browser self-approval.
+        Shared demo credentials still cannot prove independent human identity.
+        A valid session restores its issued lineage if an actor cookie is absent.
+        """
+        token = request.cookies.get("aimo_actor", "")
+        record = self.db.get("browser_actor", hashlib.sha256(token.encode()).hexdigest(), BUYER) if token else None
+        if not record or (expected and record.get("actor_id") != expected):
+            token = secrets.token_urlsafe(40)
+            record = {"actor_id": expected or "actor-" + uuid.uuid4().hex, "created_at": datetime.now(timezone.utc).isoformat()}
+            self.db.save("browser_actor", hashlib.sha256(token.encode()).hexdigest(), BUYER, record)
+            request.state.new_actor_token = token
+            request.state.auth_state_changed = True
+        return record["actor_id"]
+
+    @staticmethod
+    def principal(info):
+        return info.get("principal_id") or ("account:" + info["username"].casefold() if info.get("username") else str(info.get("auth_method", "access_code")) + ":" + info["role"])
+
     def identity(self, request):
         token = token_from(request)
         record = self.db.get("session", hashlib.sha256(token.encode()).hexdigest(), BUYER) if token else None
         if not record or record["expires"] <= time.time() or (record.get("quick_demo") and not demo_enabled()):
             reject("authentication_required", "Sign in with your account or a private demonstration access code.")
         same_origin(request)
+        if self.db.migrate_workspace_authority():
+            request.state.auth_state_changed = True
+        actor = self.bind_actor(request, record.get("actor_id"))
+        if not record.get("actor_id") or not record.get("principal_id"):
+            digest = hashlib.sha256(token.encode()).hexdigest()
+            with self.db.tx() as connection:
+                row = connection.execute("SELECT body FROM aimo_documents WHERE kind=? AND id=? AND buyer_id=?" + (" FOR UPDATE" if self.db.backend == "postgres" else ""), ("session", digest, BUYER)).fetchone()
+                latest = json.loads(row[0]) if row else None
+                if not latest or latest["expires"] <= time.time():
+                    reject("authentication_required", "This session ended. Sign in again.")
+                if not latest.get("actor_id") or not latest.get("principal_id"):
+                    latest.update(actor_id=latest.get("actor_id") or actor, principal_id=latest.get("principal_id") or self.principal(latest))
+                    connection.execute("UPDATE aimo_documents SET body=? WHERE kind=? AND id=? AND buyer_id=?", (json.dumps(latest), "session", digest, BUYER))
+                    request.state.auth_state_changed = True
+                record = latest
+            # Concurrent first-use migrations must converge on the first
+            # committed lineage, and must never revive a logged-out token.
+            if record["actor_id"] != actor:
+                self.bind_actor(request, record["actor_id"])
+        if record["role"] == "approver":
+            assignment = self.db.workspace_authority(record["buyer_id"], record["customer_id"])
+            if not assignment or not assignment.get("active") or record["principal_id"] not in assignment.get("approver_principals", []):
+                reject("manager_scope_revoked", "This manager is not currently assigned to this workspace.", 403)
         return self.public(record)
 
     def demo_login(self, data, request, response):
         same_origin(request)
         if not demo_enabled():
             reject("demo_disabled", "Quick demonstration access is not enabled.", 404)
+        if self.db.migrate_workspace_authority():
+            request.state.auth_state_changed = True
         self.throttle("demo-login-" + (request.client.host if request.client else "unknown"), 30)
+        if data.role == "approver":
+            assignment = self.db.workspace_authority(QUICK_DEMO_BUYER, QUICK_DEMO_CUSTOMER)
+            if not assignment or not assignment.get("active") or "demo:approver" not in assignment.get("approver_principals", []):
+                reject("manager_scope_unassigned", "The demo manager is not assigned to this workspace.", 403)
         # This intentionally shared pair has its own ledger. Re-entry must
         # never reset spending, preferences, records or existing private data.
         with self.db.tx() as c:
@@ -205,11 +256,14 @@ class Auth:
                 self.db.save("session", digest, BUYER, existing)
 
     def issue(self, request, response, info, remember_me):
+        previous_token = token_from(request)
+        previous = self.db.get("session", hashlib.sha256(previous_token.encode()).hexdigest(), BUYER) if previous_token else None
+        actor = self.bind_actor(request, (previous or {}).get("actor_id"))
         self.revoke(request)
         token = secrets.token_urlsafe(40)
         duration = REMEMBER_SECONDS if remember_me else SESSION_SECONDS
         expires = time.time() + duration
-        record = {**info, "remember_me": remember_me, "expires": expires, "session_expires_at": datetime.fromtimestamp(expires, timezone.utc).isoformat()}
+        record = {**info, "actor_id": actor, "principal_id": self.principal(info), "remember_me": remember_me, "expires": expires, "session_expires_at": datetime.fromtimestamp(expires, timezone.utc).isoformat()}
         self.db.save("session", hashlib.sha256(token.encode()).hexdigest(), BUYER, record)
         response.set_cookie("aimo_session", token, httponly=True, samesite="strict", secure=request.url.scheme == "https" or os.getenv("AIMO_SECURE_COOKIES") == "1", max_age=duration if remember_me else None)
         return self.public(record)
@@ -220,12 +274,18 @@ class Auth:
         role = next((role for role, code in access_codes().items() if hmac.compare_digest(code.encode(), data.access_code.encode())), None)
         if not role:
             reject("invalid_access_code", "Access code was not recognized.")
+        if self.db.migrate_workspace_authority():
+            request.state.auth_state_changed = True
         workspace_id = data.workspace_id or BUYER
         if role == "buyer" and workspace_id != BUYER:
             reject("workspace_forbidden", "Use your account credentials to open a private workspace.", 403)
         owner = self.db.user_workspace(workspace_id) if workspace_id != BUYER else None
         if workspace_id != BUYER and not owner:
             reject("workspace_not_found", "Workspace not found.", 404)
+        if role == "approver":
+            assignment = self.db.workspace_authority(workspace_id, owner["customer_id"] if owner else CUSTOMER)
+            if not assignment or not assignment.get("active") or "access_code:approver" not in assignment.get("approver_principals", []):
+                reject("manager_scope_unassigned", "The configured manager is not assigned to this workspace.", 403)
         info = {"role": role, "name": APPROVER if role == "approver" else "Aurora external buyer agent", "buyer_id": owner["buyer_id"] if owner else BUYER, "customer_id": owner["customer_id"] if owner else CUSTOMER, "commercial_customer_id": CUSTOMER, "workspace_id": workspace_id, "workspace_name": owner["name"] + " · demonstration workspace" if owner else "Aurora shared demonstration", "username": None, "auth_method": "access_code", "demo_workspace": workspace_id == BUYER}
         return self.issue(request, response, info, data.remember_me)
 

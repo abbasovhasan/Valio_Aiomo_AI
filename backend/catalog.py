@@ -8,6 +8,8 @@ from functools import lru_cache
 from .config import ROOT
 
 DEFAULT_IDS = ["464306", "464398", "465039"]
+_BRAND_CATALOG = None
+_BRAND_NAMES = ()
 
 
 @lru_cache(maxsize=1)
@@ -16,6 +18,22 @@ def load_catalog():
     if not path.exists():
         return {}
     return {str(p["id"]): p for p in json.loads(path.read_text())}
+
+
+def brand_names():
+    """Index names from the immutable source, not eligibility or live facts.
+
+    A replaced/reloaded catalog object rebuilds the index. No buyer preferences,
+    dietary claims, price, availability or purchasing authority is cached here.
+    """
+    global _BRAND_CATALOG, _BRAND_NAMES
+    rows = load_catalog()
+    if rows is not _BRAND_CATALOG:
+        brands = {str(p.get("synkkaData", {}).get("brand") or "").strip()
+                  for p in rows.values()}
+        _BRAND_NAMES = tuple(sorted((b for b in brands if len(b) >= 2), key=lambda b: (-len(b), b)))
+        _BRAND_CATALOG = rows
+    return _BRAND_NAMES
 
 
 @lru_cache(maxsize=1)

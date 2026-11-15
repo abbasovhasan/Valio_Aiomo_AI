@@ -57,6 +57,10 @@ def digest(o):
     # Legacy offers can be inspected but current_policy blocks new approvals/commits.
     if "mandate_snapshot" in o:
         keys.append("mandate_snapshot")
+    # New browser-lineage bindings do not rewrite historical receipt hashes.
+    for key in ["requester_actor", "requester_principal"]:
+        if key in o:
+            keys.append(key)
     return hashlib.sha256(
         json.dumps(
             {k: o.get(k) for k in keys}, sort_keys=True, separators=(",", ":")

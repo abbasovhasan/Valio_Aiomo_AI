@@ -1,12 +1,12 @@
 # A4TB · Valio Aimo — deployment
 
-14 November 2026. Public entry: **[A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site)**. Sites proxies the code-gated React/FastAPI app on Modal. Shared buyer/approver access and invitation-gated private accounts are supported. Repository, catalog and runtime credentials remain private. All orders are simulated; deployment does not submit the Junction entry.
+15 November 2026. Public entry: **[A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site)**. Sites proxies the authenticated React/FastAPI app on Modal, with explicitly enabled controlled demo roles. Shared buyer/approver access and invitation-gated private accounts are supported. Repository, catalog and runtime credentials remain private. All orders are simulated; deployment does not submit the Junction entry.
 
 Technical origin: `https://hasan-abbasov--aimo-order-desk-web.us-east.modal.run`. The branded Sites address is the customer-facing URL; the Modal workspace prefix is infrastructure naming.
 
 ## Runtime and persistence
 
-- One CPU, 1,536 MiB, zero minimum warm containers, maximum one container/input, 120-second idle scale-down and 180-second request timeout.
+- One CPU, 1,536 MiB, zero minimum warm containers, maximum one container/input, 300-second idle scale-down and 180-second request timeout.
 - Four original SHA-256-verified restricted datasets in a private catalog volume; none in Git or public assets.
 - Separate private SQLite volume stores users, preferences, hashed sessions/revocations, authentication throttles, carts, personal history metadata, approvals, receipts and synthetic spend. Volume commits complete before acknowledging mutations. History removal hides a personal entry; it does not erase purchasing evidence.
 - Runtime keys/codes use a named Modal Secret. The Aiven password is not uploaded. Local PostgreSQL remains available with CA/hostname verification; its allowlist was not widened.
@@ -20,7 +20,9 @@ The previous release's local app/catalog/media sample observed about 882 MiB res
 
 ## Financial controls
 
-Account verification established a $100 Junction grant expiring 30 November 2027, a Modal-set $101 hard workspace cap, and no payment method; increasing the cap required adding one. No payment method, subscription or top-up was added. The latest November preparation CSV observation was **$0.06505835**, after the earlier **$0.04369075** observation. Reports can lag/include other workspace activity; neither is a final bill or remaining balance. Read the dashboard and verify coverage before later provisioning. [Modal budget behavior](https://modal.com/docs/guide/budgets).
+Read-only live dashboard verification on15November showed **$100.76 usable credits**, **$0.24 cycle usage covered by credits /$0 charges**, active Junction grant **$100 remaining**, expiry **30November2027**, enforced **$101 cap**, and a payment-method requirement to raise it. No card/top-up/subscription/cap change occurred. These are dated account observations, not a final bill or forecast. [Budget behavior](https://modal.com/docs/guide/budgets).
+
+The measured resource decision changes only idle120→300s;1CPU/1536MiB/min0/max1container/input remain. At published base Functions CPU/memory reservation rates, the additional180sidle is about **$0.0029574/cycle** before regional or higher actual usage; scaled-to-zero time is unbilled. No continuously warm service or Modal Model API is introduced. Read [performance and cost evidence](SECURE_PURCHASING_PERFORMANCE.md) before later provisioning; do not infer current credits from historical grant records or preparation CSVs.
 
 ## Reproduce
 
@@ -37,6 +39,10 @@ uv run --with modal modal deploy deploy_modal.py
 The preparation script verifies and uploads only the four authorized catalog files and sets the private runtime secret without printing values. It does not upload `.env`, local access files, the Aiven credential or unrelated local files. Restrictive dataset terms still apply. Reuse the recorded Sites project for proxy changes; backend/frontend updates do not require a new Site.
 
 ## Current release evidence
+
+**index-D7lX2GlZ.js /index-u3yDhAoS.css** is live with414 passing backend tests,74 frontend checks and18 rollout/continuity checks in54.443s. The previous writer was stopped and a unique protected backup passed integrity. Existing remembered sessions/passwords/preferences/spend, five registered QA receipts, the original shared receipt and the new isolated QA account survived. Current app/persistence Server-Timing fields distinguish handler time from durable-volume acknowledgement; actor-migration writes on GET are also committed before acknowledgement and the internal signal is removed publicly. No ledger reset occurred. The201s warm/423s zero-task observation and same-cookie/two-receipt cold recovery passed without new orders; precise shutdown timing can vary. New exact exception/transition/browser/idle evidence is in [secure purchasing acceptance](SECURE_PURCHASING_ACCEPTANCE.md).
+
+## Historical B4 release evidence
 
 Final `index-B4p90PsT.js` is publicly deployed with healthy SQLite/simulator/camera/microphone policy. Source passed **285 backend tests in 83.21s**; **12 fresh continuity checks passed in 69.561s**, preserving protected backup, remembered accounts/preferences/spending, all five QA receipts and old shared receipt, with zero new orders. Prior Bk 12@90.887s and CFF 12@153.84s remain historical records.
 

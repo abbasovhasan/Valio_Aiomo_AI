@@ -43,7 +43,13 @@ def cart(client):
     assert response.status_code == 200, response.text
     result = response.json()
     assert result["approval"]["status"] == "required"
-    return result
+    return request_cart(client, result)
+
+
+def request_cart(client, result):
+    requested = client.post("/api/v1/procurement/sessions/" + result["id"] + "/request-approval", json={"version": result["version"], "fingerprint": result["offer"]["fingerprint"]})
+    assert requested.status_code == 200, requested.text
+    return requested.json()
 
 
 @pytest.mark.parametrize("flag", [None, "", "false", "1", "yes"])
@@ -92,7 +98,7 @@ def test_demo_remember_restart_expiry_logout_and_disable(demo_env, monkeypatch):
     store, app = demo_env
     client = TestClient(app, base_url="https://testserver")
     session_cookie = enter(client)
-    assert "Max-Age" not in session_cookie.headers["set-cookie"]
+    assert "Max-Age" not in next(value for value in session_cookie.headers.get_list("set-cookie") if value.startswith("aimo_session="))
     digest = hashlib.sha256(client.cookies.get("aimo_session").encode()).hexdigest()
     session = store.get("session", digest, BUYER)
     assert 8 * 3600 - 10 < session["expires"] - time.time() <= 8 * 3600
@@ -201,6 +207,7 @@ def test_exact_rejection_persists_and_buyer_can_revise_then_obtain_approval(demo
     assert len(decisions) == 1 and json.loads(decisions[0][0])["fingerprint"] == exact["fingerprint"]
     updated = buyer.post(path + "/actions", json={"version": rejected["version"], "action": "set_quantity", "line_id": rejected["lines"][0]["id"], "quantity": "21"}).json()
     assert updated["rejection"] is None and updated["approval"]["status"] == "required"
+    updated = request_cart(buyer, updated)
     assert updated["offer"]["fingerprint"] != exact["fingerprint"]
     assert manager.post(path + "/approve", json=exact).status_code == 409
     current = {"fingerprint": updated["offer"]["fingerprint"]}

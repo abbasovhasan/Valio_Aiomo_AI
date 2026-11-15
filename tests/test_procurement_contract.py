@@ -41,15 +41,16 @@ def contract_cart(tmp_path, monkeypatch):
     monkeypatch.setattr(procurement.catalog, "load_catalog", lambda: {product["id"]: product})
     app = FastAPI()
     store = Store(tmp_path / "response-contract.sqlite", postgres=False)
+    store.migrate_workspace_authority()
 
     def buyer():
         return {
             "role": "buyer", "name": "Contract test buyer",
-            "buyer_id": BUYER, "customer_id": CUSTOMER,
+            "buyer_id": BUYER, "customer_id": CUSTOMER, "actor_id": "contract-buyer", "principal_id": "access_code:buyer",
         }
 
     def approver():
-        return buyer() | {"role": "approver", "name": "Contract test manager"}
+        return buyer() | {"role": "approver", "name": "Contract test manager", "actor_id": "contract-manager", "principal_id": "access_code:approver"}
 
     procurement.register_routes(app, store, buyer, approver, buyer, lambda *args: None)
     client = TestClient(app)

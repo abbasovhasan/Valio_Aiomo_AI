@@ -129,7 +129,7 @@ def test_customer_budget_shortfall_has_its_own_explicit_correction(audit):
     butter, _ = raw_product("Valio butter 500 g unsalted")
     session = create(client, butter, "1", "packages", budget="1.00")
     assert session["cart"]["budget_remaining"] == "-7.91"
-    assert any("exceeds your hard budget by €7.91" in p for p in prompts(session))
+    assert any("exceeds your requested budget by €7.91" in p for p in prompts(session))
     assert not any("Purchasing policy:" in p for p in prompts(session))
     correction = [o for q in session["clarification_questions"] for o in q["options"]
                   if o["id"] == "raise-item-budget"]

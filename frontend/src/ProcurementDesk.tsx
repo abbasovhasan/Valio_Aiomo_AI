@@ -1,11 +1,13 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
-  ArrowRight, ArrowUpRight, Check, CheckCheck, Clock3,
+  ArrowLeft, ArrowRight, ArrowUpRight, Check, Columns3, CheckCheck, Clock3,
   LoaderCircle, MessageSquare, Package, Plus, RefreshCw, ShieldCheck,
   ShoppingBasket, SlidersHorizontal, Trash2, X, Search,
 } from "lucide-react";
 import "./procurement.css";
+import { OrderReview, approvalReason, reviewStateLabel } from "./OrderReview";
+import type { ApprovalInfo, BudgetException, ReviewSnapshot } from "./OrderReview";
 import { PreferencesPanel } from "./PreferencesPanel";
 import { MultimodalInput } from "./MultimodalInput";
 import { ProductWorkspace } from "./ProductWorkspace";
@@ -36,7 +38,8 @@ type SimulatedReceipt = {
   id?: string; order_id?: string; total?: string; status?: string; created_at?: string;
   items?: CartItem[]; requested_date?: string; customer_id?: string; mode?: string;
   price_scope?: string; notice?: string;
-  approval?: { approver?: string; approved_at?: string; fingerprint?: string } | null;
+  approval?: { approver?: string; approved_at?: string; fingerprint?: string; covered_reasons?: string[] } | null;
+  budget_exception?: BudgetException | null;
 };
 type ProcurementSession = {
   id: string; buyer_id?: string; version: number; order_status: string; assistant_message: string;
@@ -45,7 +48,8 @@ type ProcurementSession = {
   lines: Line[];
   cart: { items: CartItem[]; subtotal?: string | null; total?: string | null; unknown_charges?: unknown; budget_remaining?: string | null };
   clarification_questions?: { id: string; line_id?: string; prompt: string; options?: { id: string; label: string; action: string; payload?: Record<string, unknown> }[] }[];
-  approval?: { status?: string; threshold?: string; approved?: boolean };
+  approval?: ApprovalInfo;
+  review_state?: string; buyer_name?: string; workspace_name?: string | null; customer_id?: string; request_title?: string; submitted_at?: string | null; original_request?: string; budget_exception?: BudgetException | null; decision_history?: ReviewSnapshot["decision_history"];
   rejection?: { reason?: string | null; approver?: string; rejected_at?: string } | null;
   can_confirm: boolean; mode: string;
   offer?: { id: string; fingerprint: string; expires_at: string; total: string; status: string } | null;
@@ -142,7 +146,7 @@ function numericValue(value: string | null | undefined): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
-function CandidateChoices({ line, renderCandidate }: { line: Line; renderCandidate: (candidate: Candidate) => React.ReactNode }) {
+function CandidateChoices({ line, renderCandidate, compareCount, onCompare, disabled }: { line: Line; renderCandidate: (candidate: Candidate) => React.ReactNode; compareCount: number; onCompare: () => void; disabled: boolean }) {
   const [sort, setSort] = useState<CandidateSort>("recommended");
   const [validOnly, setValidOnly] = useState(false);
   const [brand, setBrand] = useState("");
@@ -185,7 +189,7 @@ function CandidateChoices({ line, renderCandidate }: { line: Line; renderCandida
       </div>
       <p>Filters change the view, not your order requirements. Unknown attributes do not count as a match. The selected product always stays visible.</p>
     </details>
-    <div className="proc-filter-count" role="status"><span>{matchingCount} of {line.candidates.length} products match{activeFilters ? " your filters" : ""}.</span>{selectedOutsideFilter && <strong>Selected product kept visible outside the filter.</strong>}</div>
+    <div className="proc-filter-count"><span role="status">{matchingCount} of {line.candidates.length} products match{activeFilters ? " your filters" : ""}.</span>{selectedOutsideFilter && <strong>Selected product kept visible outside the filter.</strong>}<button type="button" className="proc-compare-items" disabled={disabled || compareCount < 2} onClick={onCompare}><Columns3 size={14}/>Compare items{compareCount ? ` (${compareCount})` : ""}</button></div><p className="proc-compare-hint">Select Compare on any two or three products. Comparison is optional and does not change your cart.</p>
     {visible.length ? <><div className="proc-candidates">{visible.slice(0, 4).map(renderCandidate)}</div>{visible.length > 4 && <details className="proc-more-candidates"><summary>Show {visible.length - 4} more alternatives</summary><div className="proc-candidates">{visible.slice(4).map(renderCandidate)}</div></details>}</> : <div className="proc-no-match"><p>No returned products match these filters. Reset the view or refine the product search.</p><button type="button" onClick={reset}>Reset view</button></div>}
     <p className="proc-comparison-scope">Basket change compares the server-quoted total with your selected product after rounding. Prices and sorting cover these retrieved products, not the entire catalog.</p>
   </div>;
@@ -201,6 +205,7 @@ function OrderReceiptSummary({ receipt }: { receipt: SimulatedReceipt }) {
       <div><dt>Price & stock source</dt><dd>{receipt.mode === "fixture" ? "Authored rehearsal fixture" : receipt.mode === "live" ? "Live challenge sandbox" : "See recorded quotation"}</dd></div>
       <div><dt>Manager approval</dt><dd>{receipt.approval ? `Approved${receipt.approval.approver ? ` by ${receipt.approval.approver}` : ""}` : "No separate manager approval recorded"}{receipt.approval?.approved_at && <small>{timestampLabel(receipt.approval.approved_at)}</small>}</dd></div>
     </dl>
+    {receipt.budget_exception && <div className="proc-receipt-exception"><h4>Approved budget exception</h4><p>Original requested budget: {money(receipt.budget_exception.original_budget)} · quoted items: {money(receipt.budget_exception.total)} · approved excess: {money(receipt.budget_exception.excess)}.</p>{receipt.budget_exception.explanation && <p>Buyer explanation: {receipt.budget_exception.explanation}</p>}</div>}
     {receipt.items?.length ? <table className="proc-receipt-items"><caption>Confirmed items and exact sales-package quantities</caption><thead><tr><th scope="col">Product</th><th scope="col">Ordered quantity</th><th scope="col">Item subtotal</th></tr></thead><tbody>{receipt.items.map((item, i) => <tr key={`${item.id}-${i}`}><th scope="row">{item.name}<small>SKU {item.id}</small></th><td data-label="Ordered quantity">{salesQuantity(item.quantity_sales_units,item.sales_unit)}{item.quantity_breakdown?.map((quantity, j) => <small key={j}>{amount(quantity.effective_quantity)} {measurementLabel(quantity.unit)} planned{Number(quantity.surplus_quantity) > 0 && ` · ${amount(quantity.surplus_quantity)} ${measurementLabel(quantity.unit)} surplus`}</small>)}</td><td data-label="Item subtotal">{money(item.line_total)}</td></tr>)}</tbody></table> : <p>The item list is available in the recorded cart.</p>}
     <div className="proc-order-next"><h4>What happens next?</h4><p>This simulation stops here. No supplier delivery has been scheduled and no invoice or payment has been created. Use “Verify receipt” to check this saved simulator record.</p><p>For an actual purchase, use your authorized supplier ordering channel. Your customer contract governs any real invoice and payment terms.</p></div>
     <p className="proc-order-scope">Quoted item prices include tax. Delivery and service charges are excluded. This receipt is not a Valio Aimo order confirmation.</p>
@@ -227,6 +232,8 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
   const [compactCart, setCompactCart] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1000px)").matches);
   const [cartOpen, setCartOpen] = useState(false);
   const [reviewConfirm, setReviewConfirm] = useState(false);
+  const [approvalExplanation, setApprovalExplanation] = useState("");
+  const [compareOpenRequest, setCompareOpenRequest] = useState(0);
   const [confirmedReceipt, setConfirmedReceipt] = useState<SimulatedReceipt | null>(null);
   const [verification, setVerification] = useState<{ integrity_valid: boolean; scope_valid: boolean; receipt_id?: string } | null>(null);
   const [clock, setClock] = useState(Date.now());
@@ -235,6 +242,8 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
   const entryDate = useRef<HTMLInputElement>(null);
   const entryBudget = useRef<HTMLInputElement>(null);
   const result = useRef<HTMLDivElement>(null);
+  const reviewRegion = useRef<HTMLDivElement>(null);
+  useEffect(()=>{if(reviewConfirm){reviewRegion.current?.focus({preventScroll:true});reviewRegion.current?.scrollIntoView({block:"start"});}},[reviewConfirm]);
   const sessionRef = useRef<ProcurementSession | null>(null);
   const importedSession = useRef<string | null>(null);
   const activeCartCallback = useRef(onActiveCartChange); activeCartCallback.current = onActiveCartChange;
@@ -242,7 +251,7 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
   useEffect(() => () => activeCartCallback.current?.(null), []);
   sessionRef.current = session;
   function accept(next: ProcurementSession) {
-    if (sessionRef.current && sessionRef.current.id !== next.id) compareDispatch({type:"clear"});
+    if (sessionRef.current && sessionRef.current.id !== next.id) { compareDispatch({type:"clear"}); setApprovalExplanation(""); }
     else compareDispatch({type:"update",entries:smartComparison.entries.map((entry) => {
       const line = next.lines.find((candidate)=>candidate.id===entry.lineId);
       const product = line?.candidates.find((candidate)=>candidate.id===entry.product.id);
@@ -254,7 +263,7 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
     if (next.use_model !== undefined) setUseModel(next.use_model);
     setBudget(next.constraints?.budget ?? "");
     setDeliveryDate(next.constraints?.delivery_date || "");
-    setReviewConfirm(false);
+    if (next.receipt || (sessionRef.current && sessionRef.current.id !== next.id)) setReviewConfirm(false);
     setVerification(null);
     setConfirmedReceipt(next.receipt || null);
   }
@@ -263,7 +272,7 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
     const incoming = initialSessionId && initialSessionId !== importedSession.current ? initialSessionId : null;
     const id = incoming || recall(buyerId);
     if (!id) return;
-    if (incoming) { importedSession.current = incoming; compareDispatch({type:"clear"}); setSession(null); setConfirmedReceipt(null); setVerification(null); }
+    if (incoming) { setApprovalExplanation(""); importedSession.current = incoming; compareDispatch({type:"clear"}); setSession(null); setConfirmedReceipt(null); setVerification(null); }
     let cancelled = false;
     setBusy("restore");
     api(`/procurement/sessions/${encodeURIComponent(id)}`)
@@ -284,7 +293,7 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
     update(); media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
-  useEffect(() => { setDetails(null); setCartOpen(false); }, [view, active]);
+  useEffect(() => { setDetails(null); setCartOpen(false); setReviewConfirm(false); }, [view, active]);
   async function perform(label: string, operation: () => Promise<any>, clearMessage = false) {
     if (!role) { onSignIn(); return; }
     setBusy(label); setError(""); setNotice("");
@@ -295,7 +304,7 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
       else if (data?.receipt) setConfirmedReceipt(data.receipt);
       else if (label === "confirm") setConfirmedReceipt(data);
       if (clearMessage) setMessage("");
-      await onUpdated?.();
+      if (label !== "review" && label !== "status") await onUpdated?.();
       return data;
     } catch (e) {
       const text = (e as Error).message;
@@ -357,9 +366,22 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
     });
     return Boolean(data);
   }
-  async function approve() {
-    if (!session?.offer) return;
-    await perform("approve", () => api(`/procurement/sessions/${session.id}/approve`, { method: "POST", body: JSON.stringify({ fingerprint: session.offer!.fingerprint }) }));
+  async function openReview() {
+    if (!session || isWorking || mediaBusy) return;
+    const draft = currentRequirements();
+    if (draft.date !== (session.constraints.delivery_date || "") || draft.budget !== String(session.constraints.budget ?? "")) {
+      setNotice("Apply your delivery date and budget changes before reviewing the order."); editRequirements(); return;
+    }
+    const current = await perform("review", () => api(`/procurement/sessions/${session.id}`));
+    if (current) { setCartOpen(false); setReviewConfirm(true); result.current?.scrollIntoView({block:"start"}); }
+  }
+  async function requestApproval() {
+    if (!session?.offer || !session.approval?.can_request) return;
+    await perform("request-approval", () => api(`/procurement/sessions/${session.id}/request-approval`, {method:"POST",body:JSON.stringify({version:session.version,fingerprint:session.offer!.fingerprint,explanation:approvalExplanation.trim() || null})}));
+  }
+  async function cancelRequest() {
+    if (!session) return;
+    await perform("cancel", () => api(`/procurement/sessions/${session.id}/cancel`, {method:"POST",body:JSON.stringify({version:session.version})}));
   }
   async function refreshStatus() {
     if (!session) return;
@@ -399,15 +421,18 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
     compareDispatch({type:"clear"});
     setSession(null); remember(null, buyerId || session?.buyer_id); setMessage(""); setConfirmedReceipt(null);
     setBudget(""); setDeliveryDate(""); setUseModel(false); setDetails(null); if (!demoTools) setMode("live");
-    setError(""); setNotice(""); setReviewConfirm(false); setVerification(null); setCartOpen(false); composer.current?.focus();
+    setError(""); setNotice(""); setApprovalExplanation(""); setReviewConfirm(false); setVerification(null); setCartOpen(false); composer.current?.focus();
   }
   const receipt = confirmedReceipt || session?.receipt;
-  const canEdit = role !== "approver" && !receipt;
+  const cancelled = session?.review_state === "CANCELLED";
+  const canEdit = role !== "approver" && !receipt && !cancelled;
   const approvalDeclined = session?.approval?.status === "rejected";
-  const approvalNeeded = !approvalDeclined && (session?.approval?.status === "required" || session?.offer?.status === "approval_required");
+  const changesRequested = session?.review_state === "CHANGES_REQUESTED" || session?.approval?.status === "changes_requested";
+  const approvalPending = session?.approval?.pending === true;
+  const approvalNeeded = !approvalDeclined && !changesRequested && !cancelled && (session?.approval?.status === "required" || session?.offer?.status === "approval_required");
   const approved = !approvalDeclined && (session?.approval?.approved || session?.approval?.status === "approved");
   const offerExpired = Boolean(session?.offer && Date.parse(session.offer.expires_at) <= clock);
-  const ready = !approvalDeclined && session?.order_status === "READY_TO_ORDER";
+  const ready = !approvalDeclined && !changesRequested && !cancelled && session?.order_status === "READY_TO_ORDER";
   const questions = session?.clarification_questions || [];
   const unresolvedCount = session?.lines.filter((line) => !line.selected_product_id || Boolean(line.issues?.length)).length || 0;
   const hasUnknownCharges = Boolean(session?.cart.unknown_charges && (!Array.isArray(session.cart.unknown_charges) || session.cart.unknown_charges.length));
@@ -451,11 +476,13 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
               <div className="proc-totals">{unresolvedCount > 0 && <p className="proc-cart-partial">Partial cart · {unresolvedCount} {unresolvedCount === 1 ? "request still needs" : "requests still need"} attention.</p>}<div><span>{session.cart.total == null ? "Item subtotal" : "Cart total"}</span><strong>{money(displayedTotal)}</strong></div>{session.cart.budget_remaining != null && <div className={negativeBudget ? "over-budget" : "under-budget"}><span>{negativeBudget ? "Budget balance (over)" : "Budget remaining"}</span><b>{money(session.cart.budget_remaining)}</b></div>}{hasUnknownCharges && <p className="proc-candidate-warning">Delivery and service charges excluded.</p>}<small>Tax included. Availability is not a reservation.</small></div>
               {receipt ? <div className="proc-success" role="status"><span><CheckCheck size={24} /></span><h4>Simulated order recorded.</h4><p>{receipt.order_id || receipt.id}</p><strong>{money(receipt.total ?? displayedTotal)}</strong><small>This is a prototype receipt. No real supplier order, invoice or payment was created.</small><button onClick={verifyReceipt} disabled={isWorking}>{busy === "verify" ? "Checking receipt…" : verification ? "Verify receipt again" : "Verify receipt"}<RefreshCw size={13} /></button>{verification && <p className="proc-receipt-verified"><ShieldCheck size={14} />The saved receipt matches this recorded order. This verifies our simulator record.</p>}<button onClick={startNew}>Start another request<ArrowRight size={13} /></button></div> : <div className="proc-checkout">
                 {approvalDeclined && <div className="proc-approval proc-approval-declined"><ShieldCheck size={18} /><div><strong>Approval declined</strong>{session.rejection?.reason && <p>{session.rejection.reason}</p>}{session.rejection?.approver && <p>Decision by {session.rejection.approver}{session.rejection.rejected_at && ` · ${timestampLabel(session.rejection.rejected_at)}`}</p>}<p>Revise this cart or refresh prices and availability before requesting a new decision.</p></div></div>}
-                {approvalNeeded && !approved && <div className="proc-approval"><ShieldCheck size={18} /><div><strong>Purchasing approval needed</strong><p>This exact cart exceeds the buyer's authority. A separate approver must review it.{session.approval?.threshold != null && ` Autonomous limit: ${money(session.approval.threshold)}.`}</p>{role === "approver" ? <button onClick={approve} disabled={isWorking || !session.offer || offerExpired}>{busy === "approve" ? "Approving…" : "Approve this exact cart"}<Check size={14} /></button> : <button onClick={onSignIn}>Sign in as approver<ArrowUpRight size={13} /></button>}<button type="button" onClick={refreshStatus} disabled={isWorking}>{busy === "status" ? "Checking status…" : "Refresh status"}<RefreshCw size={13} /></button></div></div>}
+                {changesRequested && <div className="proc-approval proc-approval-declined"><ShieldCheck size={18}/><div><strong>Changes requested</strong><p>{session.decision_history?.slice().reverse().find((decision)=>decision.action === "request_changes" || decision.action === "changes_requested")?.reason || session.assistant_message}</p><p>Revise the cart and request a fresh decision.</p></div></div>}
+                {approvalNeeded && !approved && <div className="proc-approval"><ShieldCheck size={18}/><div><strong>{approvalPending ? "Approval requested" : "Approval required"}</strong>{session.approval?.reasons?.map((reason)=><p key={reason}>{approvalReason(reason)}</p>)}<p>{approvalPending ? "A separate manager must review this exact basket. Use a different browser session for the manager decision." : session.approval?.can_request ? "Review the order, then request approval for this exact basket." : "Resolve the remaining requirements before requesting approval."}</p><button type="button" onClick={refreshStatus} disabled={isWorking}>{busy === "status" ? "Checking status…" : "Refresh status"}<RefreshCw size={13}/></button></div></div>}
+                {cancelled && <p className="proc-blocked-note">This request was cancelled. Start a new request to continue.</p>}
                 {approved && <p className="proc-approved"><ShieldCheck size={15} />This exact cart has manager approval.</p>}
                 {session.offer && <div className={`proc-offer-expiry ${offerExpired ? "expired" : ""}`}><Clock3 size={13} /><span>{offerExpired ? "Quote expired. Refresh prices and availability." : <>Quote valid until {new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Helsinki" }).format(new Date(session.offer.expires_at))} Helsinki</>}</span></div>}
-                {reviewConfirm ? <div className="proc-confirm-review"><h4>Confirm this simulated order?</h4><p>{session.cart.items.length} selected products · {money(displayedTotal)} in items · requested {dateLabel(session.constraints.delivery_date)}.</p><button className="proc-confirm" onClick={confirm} disabled={isWorking || approvalDeclined || offerExpired}>{busy === "confirm" ? <LoaderCircle className="spin" size={15} /> : <CheckCheck size={16} />}Confirm simulated order</button><button className="proc-cancel" disabled={isWorking} onClick={() => setReviewConfirm(false)}>Keep reviewing</button></div> : <button className="proc-confirm" disabled={isWorking || approvalDeclined || !session.can_confirm || role !== "buyer" || offerExpired} onClick={() => setReviewConfirm(true)}>Review & confirm<ArrowRight size={16} /></button>}
-                {!session.can_confirm && !approvalNeeded && !approvalDeclined && <p className="proc-blocked-note">Resolve all product and constraint questions before confirming the full cart.</p>}
+                <button className="proc-confirm" disabled={isWorking || mediaBusy || !session.lines.length} onClick={openReview}>{busy === "review" ? <><LoaderCircle className="spin" size={15}/>Opening review…</> : <>Review order<ArrowRight size={16}/></>}</button>
+                {!session.can_confirm && !approvalNeeded && !approvalDeclined && !cancelled && <p className="proc-blocked-note">Resolve all product and constraint questions before confirming the full cart.</p>}
                 {role === "approver" && session.can_confirm && <p className="proc-blocked-note">Sign in as buyer to confirm the approved cart.</p>}
                 <button className="proc-refresh" disabled={isWorking || !canEdit || !session.lines.length} onClick={() => action("quote")}>{busy === "quote" ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}Refresh prices & availability</button>
               </div>}
@@ -468,6 +495,7 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
   </>;
   return (
     <section className="procurement" aria-label="AI purchasing assistant">
+      <div hidden={reviewConfirm}>
       <div className="procurement-heading"><h1>{view === "products" ? "Products" : view === "history" ? "History" : "Smart order"}</h1>{session && view !== "history" && <button className="proc-new" onClick={startNew} disabled={isWorking}><Plus size={16} />New request</button>}</div>
       {compactCart && view !== "history" && <button type="button" className="proc-mobile-cart-entry" aria-haspopup="dialog" disabled={mediaBusy || isWorking} onClick={() => setCartOpen(true)}><span><ShoppingBasket size={18} /><span><b>Cart · {session?.cart.items.length || 0} products</b><small>{receipt ? "Recorded" : approvalDeclined ? "Approval declined" : approvalNeeded && !approved ? "Approval needed" : ready ? "Ready to review" : session ? "Needs review" : "No products yet"}</small></span></span><strong>{session ? money(displayedTotal) : "Empty"}<ArrowRight size={16} /></strong></button>}
       <div className={`procurement-grid ${view === "history" ? "is-history" : ""}`}>
@@ -499,7 +527,7 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
 
               {session.recipe_review_required && <div className="proc-question proc-recipe-review"><span className="eyebrow">CHEF REVIEW</span><h3>Review the proposed recipe before buying.</h3>{session.recipe_notes?.map((note, i) => <p key={i}>{note}</p>)}<p>Check ingredient quantities, dietary groups and your kitchen’s preparation needs. Acknowledgement records your review; it does not certify a recipe or product.</p><button disabled={isWorking || !canEdit} onClick={() => action("acknowledge_recipe")}>I have reviewed the proposed recipe<Check size={14} /></button></div>}
               {questions.filter((q) => !q.line_id && !(session.recipe_review_required && /review and acknowledge.*recipe/i.test(q.prompt))).map((q) => <div className="proc-question" key={q.id}><h3>{q.prompt}</h3>{/how many.*(?:both|overlap)|need both vegetarian/i.test(q.prompt) && <form className="proc-overlap-form" onSubmit={(e) => { e.preventDefault(); const form = new FormData(e.currentTarget); action("message", { message: `${form.get("overlap")} overlap` }); }}><label htmlFor={`overlap-${q.id}`}>Diners who need both diets</label><div><input id={`overlap-${q.id}`} name="overlap" type="number" min="0" max="10000" step="1" required defaultValue="0" disabled={isWorking || !canEdit} /><button type="submit" disabled={isWorking || !canEdit}>Apply overlap<Check size={14} /></button></div><small>Enter 0 if the dietary groups do not overlap.</small></form>}<div>{q.options?.map((o) => <button key={o.id} disabled={isWorking || !canEdit} onClick={() => action(o.action, o.payload || {})}>{o.label}<ArrowRight size={14} /></button>)}</div></div>)}
-              {view === "order" && <ProductComparison state={smartComparison} dispatch={compareDispatch} api={api} date={deliveryDate} mode={mode} applyPreferences={false} disabled={isWorking || mediaBusy} chooseLabel="Choose for this request" onChoose={(entry)=>entry.lineId ? action("select_product",{line_id:entry.lineId,product_id:entry.product.id}) : undefined} onDetails={(entry)=>setDetails({candidate:entry.product,quantity:entry.requestedQuantity,unit:entry.requestedUnit})} />}
+              {view === "order" && <ProductComparison state={smartComparison} dispatch={compareDispatch} api={api} date={deliveryDate} mode={mode} applyPreferences={false} disabled={isWorking || mediaBusy} openRequest={compareOpenRequest} chooseLabel="Choose for this request" onChoose={(entry)=>entry.lineId ? action("select_product",{line_id:entry.lineId,product_id:entry.product.id}) : undefined} onDetails={(entry)=>setDetails({candidate:entry.product,quantity:entry.requestedQuantity,unit:entry.requestedUnit})} />}
               <div className="proc-section-title"><h2>Products <span>{session.lines.length}</span></h2><span className="proc-source-tag">{session.mode === "live" ? "Live quotation" : "Demo prices"}</span></div>
               {session.lines.map((line, index) => <article className="proc-line" key={line.id} aria-label={line.requested_label}>
                 <div className="proc-line-heading"><span className="proc-line-number">{String(index + 1).padStart(2, "0")}</span><div><h3>{line.requested_label}</h3><p>{amount(line.quantity)} {measurementLabel(line.unit)} requested <span>·</span> {line.issues?.length || line.status === "CONSTRAINT_CONFLICT" ? "Needs review" : line.selected_product_id ? "Product selected" : line.status.replaceAll("_", " ").toLowerCase()}</p></div>{canEdit && <button className="proc-icon-button" title="Remove this request" aria-label={`Remove ${line.requested_label}`} disabled={isWorking} onClick={() => action("remove_line", { line_id: line.id })}><Trash2 size={16} /></button>}</div>
@@ -509,7 +537,7 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
                 <form className="proc-quantity" key={`quantity-${line.id}-${line.quantity}`} onSubmit={(e) => { e.preventDefault(); const form = new FormData(e.currentTarget); action("set_quantity", { line_id: line.id, quantity: form.get("quantity"), unit: line.unit }); }}><label htmlFor={`quantity-${line.id}`}>Required quantity</label><div><input id={`quantity-${line.id}`} name="quantity" type="number" min="0.001" max="100000" step="0.001" required defaultValue={line.quantity} disabled={isWorking || !canEdit} /><span>{measurementLabel(line.unit)}</span><button type="submit" disabled={isWorking || !canEdit}>Update</button></div></form>
                 {!!line.issues?.length && <ul className="proc-issues">{line.issues.map((issue, i) => <li key={i}>{readable(issue)}</li>)}</ul>}
                 {questions.filter((q) => q.line_id === line.id).map((q) => <div className="proc-line-question" key={q.id}><strong>{q.prompt}</strong><div>{q.options?.filter((o) => o.action !== "select_product").map((o) => <button key={o.id} disabled={isWorking || !canEdit} onClick={() => action(o.action, { line_id: line.id, ...(o.payload || {}) })}>{o.label}<ArrowRight size={13} /></button>)}</div></div>)}
-                {!line.candidates.length ? <div className="proc-no-match"><Package size={22} /><p>No suitable catalog candidates were found. Try a different product description, change the requirement, or remove this item.</p></div> : <CandidateChoices key={`candidates-${line.id}-${line.requested_label}`} line={line} renderCandidate={(candidate) => renderCandidate(line, candidate)} />}
+                {!line.candidates.length ? <div className="proc-no-match"><Package size={22} /><p>No suitable catalog candidates were found. Try a different product description, change the requirement, or remove this item.</p></div> : <CandidateChoices key={`candidates-${line.id}-${line.requested_label}`} line={line} compareCount={smartComparison.entries.length} onCompare={()=>setCompareOpenRequest((value)=>value+1)} disabled={isWorking || mediaBusy} renderCandidate={(candidate) => renderCandidate(line, candidate)} />}
               </article>)}
               {session.lines.length === 0 && <div className="proc-no-match"><p>Your cart is empty. Describe the products you need in the request box above.</p></div>}
             </>}
@@ -518,8 +546,33 @@ export function ProcurementDesk({ api, role, onSignIn, onUpdated, initialSession
         {!compactCart && <aside hidden={view === "history"} className="proc-sidebar" tabIndex={0} aria-label="Shopping cart and order review">{cartContent}</aside>}
 
       </div>
+      </div>
+      {reviewConfirm && session && <div className="proc-review-page" ref={reviewRegion} tabIndex={-1}>
+        <h1>Review order</h1>
+        <button type="button" className="review-page-back" disabled={isWorking} onClick={()=>setReviewConfirm(false)}><ArrowLeft size={16}/>Back to cart</button>
+        {error && <p className="proc-error" role="alert">{error}</p>}
+        {notice && <p className="proc-notice" role="status">{notice}</p>}
+        <OrderReview order={session} onDetails={(candidate,quantity,unit)=>setDetails({candidate,quantity,unit})} disabled={isWorking}>
+          <section className="review-actions" aria-label="Order next step"><h3>{reviewStateLabel(session)}</h3>
+            {approvalPending && <p>Approval requested for this exact basket. A separate manager browser session can review it in Approvals. Refresh status after their decision.</p>}
+            {approved && <p>This exact basket has approval. Only the buyer can submit the simulated order.</p>}
+            {approvalDeclined && <p>Approval declined{session.rejection?.reason ? `: ${session.rejection.reason}` : "."} Return to the cart to revise and requote.</p>}
+            {changesRequested && <p>Return to the cart to make the requested changes, then request a fresh decision.</p>}
+            {session.approval?.can_request && role === "buyer" && !offerExpired && !cancelled && <form onSubmit={(event)=>{event.preventDefault();void requestApproval();}}><label htmlFor="approval-explanation">Explanation for approver (optional)</label><textarea id="approval-explanation" value={approvalExplanation} onChange={(event)=>setApprovalExplanation(event.target.value)} maxLength={500} rows={3} disabled={isWorking}/><p className="review-note">The original requested budget stays {session.constraints.budget == null ? "unset" : money(session.constraints.budget)}. The request covers only this exact quoted basket.</p><button type="submit" className="primary-button" disabled={isWorking}>{busy === "request-approval" ? <><LoaderCircle size={15} className="spin"/>Requesting approval…</> : "Request approval"}</button></form>}
+            {offerExpired && <p className="review-problem">Quote expired. Refresh prices and availability before continuing; this creates a fresh decision snapshot.</p>}
+            {cancelled && <p>This request is cancelled. Start a new request from the cart.</p>}
+            <div className="review-actions-buttons">
+              {session.can_confirm && !offerExpired && role === "buyer" && !cancelled && <button type="button" className="primary-button" onClick={confirm} disabled={isWorking}>{busy === "confirm" ? <><LoaderCircle className="spin" size={15}/>Confirming…</> : "Confirm simulated order"}</button>}
+              <button type="button" onClick={refreshStatus} disabled={isWorking}>{busy === "status" ? "Checking status…" : "Refresh status"}</button>
+              {canEdit && <button type="button" onClick={()=>action("quote")} disabled={isWorking}>{busy === "quote" ? "Refreshing quote…" : "Refresh prices & availability"}</button>}
+              <button type="button" onClick={()=>setReviewConfirm(false)} disabled={isWorking}>Edit cart & requirements</button>
+              {!cancelled && !receipt && role === "buyer" && <button type="button" onClick={cancelRequest} disabled={isWorking}>{busy === "cancel" ? "Cancelling…" : "Cancel request"}</button>}
+            </div><p className="review-note">All orders are simulated. No supplier order, invoice, payment or reservation is created.</p>
+          </section>
+        </OrderReview>
+      </div>}
       {details && <ProductDetailsDialog candidate={details.candidate} requestedQuantity={details.quantity} requestedUnit={details.unit} onClose={() => setDetails(null)} />}
-      {compactCart && cartOpen && view !== "history" && <DetailsDialog title="Cart" kind="cart" onClose={() => setCartOpen(false)}>{cartContent}</DetailsDialog>}
+      {compactCart && cartOpen && view !== "history" && !reviewConfirm && <DetailsDialog title="Cart" kind="cart" onClose={() => setCartOpen(false)}>{cartContent}</DetailsDialog>}
     </section>
   );
 }

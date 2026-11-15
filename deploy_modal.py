@@ -7,6 +7,7 @@ release before redeployment so two revisions never write the same SQLite file.
 
 import os
 import sys
+import time
 import modal
 
 app = modal.App("aimo-order-desk")
@@ -31,7 +32,9 @@ image = (
     memory=1536,
     min_containers=0,
     max_containers=1,
-    scaledown_window=120,
+    # A bounded five-minute idle window avoids measured ~6.6s cold reloads
+    # during short review/approval handoffs; still scales to zero afterwards.
+    scaledown_window=300,
     timeout=180,
 )
 @modal.concurrent(max_inputs=1)
@@ -53,8 +56,20 @@ def web():
             async def durable_send(message):
                 # Persist all finished SQL transactions before acknowledging a
                 # mutation. The single input/container prevents competing files.
-                if message["type"] == "http.response.start" and scope.get("method") in {"POST", "PUT", "PATCH", "DELETE"}:
+                headers = list(message.get("headers", [])) if message["type"] == "http.response.start" else []
+                auth_changed = any(name.lower() == b"x-aimo-state-changed" and value == b"1" for name, value in headers)
+                if message["type"] == "http.response.start":
+                    # Internal auth migration signal is emitted by the app,
+                    # never trusted from request headers or exposed publicly.
+                    headers = [(name, value) for name, value in headers if name.lower() != b"x-aimo-state-changed"]
+                    message = {**message, "headers": headers}
+                if message["type"] == "http.response.start" and (scope.get("method") in {"POST", "PUT", "PATCH", "DELETE"} or auth_changed):
+                    started = time.perf_counter()
                     await state_volume.commit.aio()
+                    elapsed_ms = (time.perf_counter() - started) * 1000
+                    timing = [value.decode("ascii") for name, value in headers if name.lower() == b"server-timing"]
+                    timing.append(f"persist;dur={elapsed_ms:.3f}")
+                    message = {**message, "headers": [(name, value) for name, value in headers if name.lower() != b"server-timing"] + [(b"server-timing", ", ".join(timing).encode("ascii"))]}
                 await send(message)
             await api(scope, receive, durable_send)
     return DurableResponses()

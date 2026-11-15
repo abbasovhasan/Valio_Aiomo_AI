@@ -208,6 +208,37 @@ def test_concurrent_cumulative_cap_atomic_and_split_requests_cannot_bypass(env):
     assert db.spent() == 575000
 
 
+def test_legacy_trust_cannot_self_approve_by_switching_role_in_one_browser(env):
+    client, db, _ = env
+    buyer = client()
+    offer = selected(run(buyer, scenario="shortage"))
+    actor = buyer.get("/api/v1/session").json()["actor_id"]
+    buyer.delete("/api/v1/session")
+    switched = buyer.post("/api/v1/session", json={"access_code": access_codes()["approver"]}).json()
+    assert switched["actor_id"] == actor
+    denied = buyer.post("/api/v1/offers/" + offer["id"] + "/approve", json={"fingerprint": offer["fingerprint"]})
+    assert denied.status_code == 403 and denied.json()["detail"]["code"] == "self_approval_forbidden"
+    independent = client("approver")
+    assert independent.post("/api/v1/offers/" + offer["id"] + "/approve", json={"fingerprint": offer["fingerprint"]}).status_code == 200
+    assert db.spent() == 0
+
+
+@pytest.mark.parametrize("restriction", ["permission", "ceiling"])
+def test_legacy_decision_cannot_claim_approval_beyond_current_manager_assignment(env, restriction):
+    client, db, _ = env
+    offer = selected(run(client(), scenario="shortage"))
+    manager = client("approver")
+    assignment = db.get("workspace_authority", "workspace-authority-" + BUYER, BUYER)
+    if restriction == "permission":
+        assignment["permissions"] = []
+    else:
+        assignment["max_total"] = "100.00"
+    db.save("workspace_authority", "workspace-authority-" + BUYER, BUYER, assignment)
+    response = manager.post("/api/v1/offers/" + offer["id"] + "/approve", json={"fingerprint": offer["fingerprint"]})
+    assert response.status_code == 403 and response.json()["detail"]["code"] == "manager_authority"
+    assert not db.get("offer", offer["id"], BUYER)["approved"] and db.spent() == 0
+
+
 def test_concurrent_duplicate_commit_single_receipt(env):
     client, db, _ = env
     c = client()

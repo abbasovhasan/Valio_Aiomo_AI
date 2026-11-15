@@ -75,7 +75,7 @@ export function AuthDialog({ api, session, onClose, onSignedIn, onLogout, onSess
 
   return <dialog ref={dialog} className="auth-modal auth-dialog" aria-labelledby="auth-title" onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}>
     <button className="modal-close icon-button" type="button" onClick={onClose} disabled={busy} aria-label="Close sign-in"><X size={20} /></button>
-    <span className="modal-icon"><KeyRound size={25} /></span>
+    <img className="auth-brand-symbol" src="/brand/a4tb-symbol.svg" alt="" aria-hidden="true" width="42" height="42" />
     <h2 id="auth-title">Sign in</h2>
     {session.role && <div className="current-session"><div><strong>{session.name}</strong><small>{session.quick_demo ? `${session.role} · shared demonstration` : session.workspace_name || session.role}</small>{!session.quick_demo && session.demo_workspace === false && <button className="text-button" type="button" disabled={busy} onClick={() => { setMethod("code"); setWorkspaceId(session.workspace_id || ""); }}>Approve this workspace</button>}</div><button className="text-button" type="button" disabled={busy} onClick={async () => { setBusy(true); setSigningOut(true); setError(""); try { await onLogout(); onClose(); } catch { setError("Sign-out could not be completed. Check the connection and try again."); } finally { setBusy(false); setSigningOut(false); } }}><LogOut size={15} />Sign out</button></div>}
     {method === "demo" ? <>

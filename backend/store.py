@@ -121,6 +121,55 @@ class Store:
             if not created:
                 raise StoreError("username_unavailable", "This username is unavailable. Choose another username.")
             c.execute("INSERT INTO aimo_accounts(buyer_id,spent_cents) VALUES(?,0)", (user["buyer_id"],))
+            self._insert_workspace_authority(c, user["buyer_id"], user["customer_id"])
+
+    @staticmethod
+    def _insert_workspace_authority(c, buyer, customer, principals=None):
+        from .config import MANAGER_PRINCIPAL, MANDATE
+        assignment = {"buyer_id": buyer, "customer_id": customer, "active": True,
+            "approver_principals": principals or [MANAGER_PRINCIPAL],
+            "permissions": ["requested_budget", "spending_authority"], "max_total": MANDATE["exception_limit"],
+            "assignment_source": "Operator policy assigns the configured demonstration manager to invitation-created workspaces; tokens remain bound to one workspace."}
+        for kind, identifier, body in [("workspace_authority", "workspace-authority-" + buyer, assignment), ("workspace_registration", "workspace-registration-" + buyer, {"buyer_id": buyer, "authority_schema": 1})]:
+            c.execute("INSERT INTO aimo_documents(kind,id,buyer_id,body) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING", (kind, identifier, buyer, json.dumps(body)))
+
+    def migrate_workspace_authority(self):
+        """One compatibility migration, never regrant a marked/revoked scope."""
+        from .config import CUSTOMER, QUICK_DEMO_BUYER, QUICK_DEMO_CUSTOMER
+        marker = "workspace-authority-migration-v1"
+        with self.tx() as c:
+            c.execute("SELECT spent_cents FROM aimo_accounts WHERE buyer_id=?" + (" FOR UPDATE" if self.backend == "postgres" else ""), (BUYER,)).fetchone()
+            if c.execute("SELECT id FROM aimo_documents WHERE kind=? AND id=? AND buyer_id=?", ("auth_migration", marker, BUYER)).fetchone():
+                return False
+            users = c.execute("SELECT buyer_id,customer_id FROM aimo_users").fetchall()
+            scopes = [(BUYER, CUSTOMER, None), (QUICK_DEMO_BUYER, QUICK_DEMO_CUSTOMER, ["demo:approver"])] + [(row[0], row[1], None) for row in users]
+            for buyer, customer, principals in scopes:
+                registered = c.execute("SELECT id FROM aimo_documents WHERE kind=? AND id=? AND buyer_id=?", ("workspace_registration", "workspace-registration-" + buyer, buyer)).fetchone()
+                if not registered:
+                    self._insert_workspace_authority(c, buyer, customer, principals)
+            c.execute("INSERT INTO aimo_documents(kind,id,buyer_id,body) VALUES(?,?,?,?)", ("auth_migration", marker, BUYER, json.dumps({"version": 1, "policy": "Explicit operator-wide demo manager assignment; no person-level or enterprise IAM claim."})))
+        return True
+
+    def workspace_authority(self, buyer, customer):
+        record = self.get("workspace_authority", "workspace-authority-" + buyer, buyer)
+        return record if self.valid_workspace_authority(record, buyer, customer) else None
+
+    @staticmethod
+    def valid_workspace_authority(record, buyer, customer):
+        from decimal import Decimal, InvalidOperation
+        if not isinstance(record, dict) or record.get("customer_id") != customer or record.get("buyer_id") != buyer or not isinstance(record.get("active"), bool):
+            return False
+        if not isinstance(record.get("approver_principals"), list) or not all(isinstance(value, str) and value for value in record["approver_principals"]):
+            return False
+        if not isinstance(record.get("permissions"), list) or not all(isinstance(value, str) and value in {"requested_budget", "spending_authority"} for value in record["permissions"]):
+            return False
+        if not isinstance(record.get("max_total"), str):
+            return False
+        try:
+            maximum = Decimal(str(record.get("max_total")))
+            return maximum.is_finite() and 0 <= maximum <= 1000000 and maximum == maximum.quantize(Decimal(".01"))
+        except (InvalidOperation, TypeError, ValueError):
+            return False
 
     def user(self, username):
         with self.tx() as c:
@@ -134,6 +183,8 @@ class Store:
 
     def save(self, kind, id, buyer, body):
         with self.tx() as c:
+            if kind in {"preferences", "workspace_authority"}:
+                c.execute("SELECT spent_cents FROM aimo_accounts WHERE buyer_id=?" + (" FOR UPDATE" if self.backend == "postgres" else ""), (buyer,)).fetchone()
             c.execute(
                 "INSERT INTO aimo_documents(kind,id,buyer_id,body) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body",
                 (kind, id, buyer, json.dumps(body)),
@@ -193,12 +244,54 @@ class Store:
             from .policy import now, parse_time
             from .config import MANDATE
 
-            if parse_time(offer["expires_at"]) <= now():
+            if not offer.get("session_id"):
+                from .policy import mandate_snapshot
+                try:
+                    current_policy = mandate_snapshot()
+                except Exception:
+                    raise StoreError("policy_unavailable", "Trusted policy is incomplete at commitment.") from None
+                if offer.get("mandate_snapshot") != current_policy:
+                    raise StoreError("policy_changed", "Trusted policy changed before commitment. Refresh the offer.")
+                if not offer.get("requester_actor") or not offer.get("requester_principal"):
+                    raise StoreError("buyer_review_required", "Refresh this older unconfirmed offer as buyer before continuing.")
+
+            if offer.get("session_id"):
+                # The same transaction sees the checkout lock, latest policy,
+                # saved hard restrictions and committed workspace spending.
+                current_row = c.execute("SELECT body FROM aimo_documents WHERE kind=? AND id=? AND buyer_id=?" + (" FOR UPDATE" if self.backend == "postgres" else ""), ("procurement", offer["session_id"], offer["buyer_id"])).fetchone()
+                current = json.loads(current_row[0]) if current_row else {}
+                if not current.get("checkout_pending") or current.get("pending_key") != key or current.get("customer_id") != offer["customer_id"] or (current.get("offer") or {}).get("fingerprint") != offer["fingerprint"] or current.get("cancelled") or current.get("rejection") or current.get("changes_requested"):
+                    raise StoreError("checkout_changed", "The exact current checkout state is no longer valid. Reload the basket.")
+                from .procurement import authority, fingerprint
+                try:
+                    trusted = authority()
+                except Exception:
+                    raise StoreError("policy_unavailable", "Trusted purchasing policy is unavailable at commitment.") from None
+                if offer.get("authority") != trusted or fingerprint(offer) != offer["fingerprint"]:
+                    raise StoreError("policy_changed", "The policy or exact basket changed before commitment. Refresh and review again.")
+                from decimal import Decimal
+                if cap != int(Decimal(trusted["cumulative_limit"]) * 100) or Decimal(offer["total"]) > Decimal(trusted["exception_limit"]):
+                    raise StoreError("authority_limit", "Current trusted purchasing limits do not authorize this basket.")
+                if Decimal(offer["total"]) > Decimal(trusted["autonomous_limit"]) and offer.get("status") != "approval_required":
+                    raise StoreError("approval_required", "The current buyer authority requires exact independent approval.")
+                from .preferences import PreferenceResponse
+                preference_row = c.execute("SELECT body FROM aimo_documents WHERE kind=? AND id=? AND buyer_id=?" + (" FOR UPDATE" if self.backend == "postgres" else ""), ("preferences", offer["buyer_id"], offer["buyer_id"])).fetchone()
+                try:
+                    saved = PreferenceResponse.model_validate(json.loads(preference_row[0]) if preference_row else {}).model_dump()
+                except Exception:
+                    raise StoreError("preferences_changed", "Current dietary restrictions cannot be validated. Refresh the basket.") from None
+                for line in current.get("lines", []):
+                    for requested, effective, defaults in [("requested_dietary", "dietary", "dietary_restrictions"), ("requested_excluded_ingredients", "excluded_ingredients", "excluded_ingredients")]:
+                        expected = set(line.get(requested, line.get(effective, []))) | set(saved[defaults])
+                        if expected != set(line.get(effective, [])):
+                            raise StoreError("preferences_changed", "Dietary restrictions changed before commitment. Refresh the basket.")
+
+            if not parse_time(offer.get("expires_at")) or parse_time(offer["expires_at"]) <= now():
                 raise StoreError(
                     "stale_offer",
                     "Offer expired while waiting to commit. Revalidate and obtain new approval.",
                 )
-            if parse_time(MANDATE["expires_at"]) <= now():
+            if not parse_time(MANDATE.get("expires_at")) or parse_time(MANDATE["expires_at"]) <= now():
                 raise StoreError(
                     "mandate_expired", "Delegated authority expired before commitment."
                 )
@@ -210,6 +303,19 @@ class Store:
                 )
             if offer["status"] == "approval_required":
                 approval = offer.get("approval") or {}
+                assignment_row = c.execute("SELECT body FROM aimo_documents WHERE kind=? AND id=? AND buyer_id=?" + (" FOR UPDATE" if self.backend == "postgres" else ""), ("workspace_authority", "workspace-authority-" + offer["buyer_id"], offer["buyer_id"])).fetchone()
+                assignment = json.loads(assignment_row[0]) if assignment_row else {}
+                if not self.valid_workspace_authority(assignment, offer["buyer_id"], offer["customer_id"]):
+                    raise StoreError("manager_authority_changed", "Trusted manager assignment is missing or invalid at commitment.")
+                from decimal import Decimal, InvalidOperation
+                try:
+                    maximum = Decimal(str(assignment.get("max_total")))
+                    authority_ok = maximum.is_finite() and maximum >= 0 and Decimal(offer["total"]) <= maximum
+                except (InvalidOperation, TypeError, ValueError):
+                    authority_ok = False
+                required_permissions = set(offer.get("approval_reasons") or ["spending_authority"])
+                if not assignment.get("active") or assignment.get("customer_id") != offer["customer_id"] or approval.get("principal_id") not in assignment.get("approver_principals", []) or not required_permissions.issubset(set(assignment.get("permissions", []))) or not authority_ok:
+                    raise StoreError("manager_authority_changed", "Current manager assignment or authority does not cover this basket. Request a new eligible decision.")
                 if (
                     not offer.get("approved")
                     or approval.get("fingerprint") != offer["fingerprint"]
@@ -221,6 +327,17 @@ class Store:
                         "approval_required",
                         "Current exact human approval is required at commitment.",
                     )
+                if offer.get("session_id") and (
+                    not offer.get("approval_request")
+                    or not approval.get("actor_id") or approval["actor_id"] == offer.get("requester_actor")
+                    or not approval.get("principal_id") or approval["principal_id"] == offer.get("requester_principal")
+                    or approval.get("session_version") != offer.get("session_version")
+                    or set(approval.get("covered_reasons", [])) != set(offer.get("approval_reasons", []))
+                    or current.get("approval", {}).get("status") != "approved"
+                ):
+                    raise StoreError("approval_required", "Independent approval must cover this exact version and every financial exception.")
+                if not offer.get("session_id") and (not offer.get("requester_actor") or not offer.get("requester_principal") or not approval.get("actor_id") or not approval.get("principal_id") or approval["actor_id"] == offer["requester_actor"] or approval["principal_id"] == offer["requester_principal"]):
+                    raise StoreError("approval_required", "A fresh offer and independent manager approval are required.")
             cents = offer["total_cents"]
             if not row or row[0] + cents > cap:
                 raise StoreError(

@@ -125,6 +125,8 @@ def candidates(query, kg, gf, origin, dietary=None, excluded_ingredients=None, p
         mass = D(p["kg_per_sales_unit"]) if p.get("kg_per_sales_unit") else None
         units = product_facts.units_for(p, kg, "kg")
         issues = product_facts.suitability(p, restrictions, origin, excluded_ingredients=excluded_ingredients)
+        dietary_issues = product_facts.suitability(p, restrictions, excluded_ingredients=excluded_ingredients)
+        dietary_status = "not_requested" if not restrictions and not excluded_ingredients else "verified_compatible" if not dietary_issues else "verified_incompatible" if any(issue.startswith(("Supplier declares contains", "Identified pork", "Identified excluded")) for issue in dietary_issues) else "evidence_missing"
         if units is None:
             issues.append("Fixed net mass / lot conversion unavailable.")
             issues.extend(p.get("conversion_issues", []))
@@ -143,6 +145,8 @@ def candidates(query, kg, gf, origin, dietary=None, excluded_ingredients=None, p
                 "claims": sorted(x for x in cs if x),
                 "historical_reliability": p.get("reliability"),
                 "issues": issues,
+                "selectable": not issues,
+                "dietary_status": dietary_status,
                 "status": "needs_chef_review" if not issues else "evidence_gap",
                 "price": None,
                 "availability": "not_queried",

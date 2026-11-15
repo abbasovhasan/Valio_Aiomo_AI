@@ -1,5 +1,7 @@
 # Purchasing-workspace refinement engineering report
 
+**Historical Bj9 refinement record.** The current D7 purchasing/identity release and verification are in [SECURE_PURCHASING_ACCEPTANCE.md](SECURE_PURCHASING_ACCEPTANCE.md); current/final wording below retains its original release scope.
+
 15 November 2026, Europe/Helsinki. This report covers both complete refinement directives: controlled Buyer/Approver access, product details and generic unit correctness; then independent purchasing workspaces, financial correctness, manual two/three-product comparison, sorting, images and customizable meal planning. It records source, automated checks, local browser and deployment evidence separately. Public deployment/recovery and the scoped priority browser journeys passed. Implementation `b166ca6` is reviewed, scanned and pushed to the private `codex/aimo-order-desk` branch.
 
 ## Resulting implementation

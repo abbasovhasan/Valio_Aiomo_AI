@@ -35,11 +35,12 @@ def env(tmp_path, monkeypatch):
         return copy.deepcopy(request)
     monkeypatch.setattr(interpretation, "interpret", interpret)
     store = Store(tmp_path / "cart.sqlite", postgres=False)
+    store.migrate_workspace_authority()
     app = FastAPI()
     def identity(x_role: str = Header(default="buyer")):
         if x_role not in ["buyer", "approver"]:
             raise HTTPException(401)
-        return {"role": x_role, "name": "Authored " + x_role, "buyer_id": BUYER, "customer_id": CUSTOMER}
+        return {"role": x_role, "name": "Authored " + x_role, "buyer_id": BUYER, "customer_id": CUSTOMER, "actor_id": "authored-actor-" + x_role, "principal_id": "access_code:" + x_role}
     def buyer(s=Depends(identity)):
         if s["role"] != "buyer":
             raise HTTPException(403)
@@ -56,7 +57,12 @@ def create(env, **changes):
     c = env[0]
     r = c.post(procurement.PREFIX, json={"message": "start", **changes})
     assert r.status_code == 200, r.text
-    return r.json()
+    result = r.json()
+    if result["approval"].get("can_request") and result["approval"]["reasons"] == ["spending_authority"]:
+        requested = c.post(procurement.PREFIX + "/" + result["id"] + "/request-approval", json={"version": result["version"], "fingerprint": result["offer"]["fingerprint"]})
+        assert requested.status_code == 200, requested.text
+        result = requested.json()
+    return result
 
 
 def act(env, session, action, **changes):
@@ -110,10 +116,10 @@ def test_consolidation_before_pack_rounding_and_stock_allocation(env):
     assert len(s["cart"]["items"][0]["line_ids"]) == 2
 
 
-def test_hard_budget_cannot_be_approved_and_correction_preserves_selection(env):
+def test_requested_budget_blocks_direct_confirmation_and_edit_preserves_selection(env):
     s = create(env, budget="0.01")
-    assert not s["can_confirm"] and s["offer"] is None
-    assert any("hard budget" in q["prompt"] for q in s["clarification_questions"])
+    assert not s["can_confirm"] and s["offer"] and s["approval"]["can_request"]
+    assert any("requested budget" in q["prompt"] for q in s["clarification_questions"])
     resolution = next(o for q in s["clarification_questions"] for o in q["options"] if o["action"] == "set_budget")
     assert resolution["payload"]["budget"] == s["cart"]["subtotal"]
     fixed = act(env, s, resolution["action"], **resolution["payload"])

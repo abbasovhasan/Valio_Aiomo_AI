@@ -359,3 +359,7 @@
 .proc-cart-requirements-summary > button { min-height:40px; }
 .proc-sidebar:focus-visible { outline:3px solid #80502f; outline-offset:3px; }
 @media(min-width:1001px) { .proc-sidebar { max-height:calc(100dvh - 44px); overflow:auto; scrollbar-gutter:stable; overscroll-behavior:contain; } }
+.proc-compare-items { display:inline-flex; align-items:center; gap:6px; min-height:38px; padding:7px 11px; border:1px solid #cbd6c2; border-radius:4px; background:#f8faf3; font-size:12px; }
+.proc-compare-items:disabled { opacity:.55; }
+.proc-compare-hint { margin:0; padding:0 18px 12px; color:#62725b; font-size:11px; line-height:1.8; }
+@media(max-width:600px) { .proc-compare-items { min-height:44px; } }

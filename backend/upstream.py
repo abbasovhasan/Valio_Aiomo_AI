@@ -7,6 +7,7 @@ from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 import httpx
 from .config import MODEL, LOCAL
+from .http_clients import provider_client
 
 
 class UpstreamError(Exception):
@@ -32,9 +33,7 @@ def sponsor_lookup(customer, day, ids):
         "customer_id": customer,
         "requested_date": day,
     }
-    with httpx.Client(
-        timeout=httpx.Timeout(15, connect=5), headers=headers, follow_redirects=False
-    ) as client:
+    with provider_client("valio") as client:
         for kind in ["price", "availability"]:
             for attempt in range(2):
                 try:
@@ -49,6 +48,7 @@ def sponsor_lookup(customer, day, ids):
                             "requestedDate": day,
                             "products": ids,
                         },
+                        headers=headers, timeout=httpx.Timeout(15, connect=5),
                     )
                     if r.status_code in [429, 502, 503, 504] and attempt == 0:
                         time.sleep(0.25)
@@ -189,7 +189,7 @@ def rank_with_nvidia(products, request):
         "max_tokens": 1200,
     }
     try:
-        with httpx.Client(timeout=httpx.Timeout(50, connect=5)) as c:
+        with provider_client("nvidia") as c:
             r = c.post(
                 "https://integrate.api.nvidia.com/v1/chat/completions",
                 headers={
@@ -197,6 +197,7 @@ def rank_with_nvidia(products, request):
                     "Content-Type": "application/json",
                 },
                 json=payload,
+                timeout=httpx.Timeout(50, connect=5),
             )
         if r.status_code != 200:
             raise UpstreamError(

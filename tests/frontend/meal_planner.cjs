@@ -21,14 +21,14 @@ function compile(file, modules = {}) {
 }
 const presentation = compile('productPresentation.ts');
 const { MealPlanner } = compile('MealPlanner.tsx', { react: hooks, './productPresentation': presentation, './api': { sessionInterrupted: error => error.name === 'AbortError' } });
-const requests = [], handoffs = [], checks = []; let accepted = false, planSequence = 0;
+const requests = [], handoffs = [], checks = []; let accepted = false, planSequence = 0, dietaryConflict = false;
 function response(body) {
   return { id: `authored-meal-${++planSequence}`, dish: body.meal_name, ingredients: body.ingredients,
     verified_recipe: false, recipe_provenance: 'customer_entered_unverified', recipe_note: 'Customer-entered quantities; not a verified recipe.',
     cohorts: { meat_standard: body.servings, meat_gluten_free: 0, vegetarian_standard: 0, vegetarian_gluten_free: 0 }, dietary_restrictions: body.dietary_restrictions,
     lines: body.ingredients.map(item => ({ id: item.id + '-shared', ingredient_id: item.id, ingredient: item.label,
       search_query: item.query, grams_per_serving: item.grams_per_serving, required_kg: '5', servings: body.servings, dietary: body.dietary_restrictions,
-      candidates: [{ product_id: `sku-${item.query}`, name: `Authored ${item.query}`, sales_unit: 'ST', kg_per_sales_unit: '2', quantity_sales_units: '3', effective_kg: '6', issues: [] }] })),
+      candidates: [{ product_id: `sku-${item.query}`, name: `Authored ${item.query}`, sales_unit: 'ST', kg_per_sales_unit: '2', quantity_sales_units: '3', effective_kg: '6', issues: dietaryConflict ? ['Gluten-free evidence is missing.'] : [] }] })),
   };
 }
 const props = { role: 'buyer', onSignIn() {}, onBeforeQuote: async () => accepted, onQuoteSession: id => handoffs.push(id), api: async (url, options) => {
@@ -66,6 +66,7 @@ async function calculate() { get(node => node.type === 'form' && node.props.clas
   get(node => node.type === 'input' && node.props.type === 'radio').props.onChange();
   input('Number of servings').props.onChange({ target: { value: '60' } });
   assert(button('Add ingredients to cart').props.disabled, 'Changed servings permit a stale transfer');
+  assert(!get(node => node.type === 'input' && node.props.type === 'radio').props.checked && render().some(node => node.type === 'summary' && text(node).includes('Recalculate to check product suitability')), 'Dirty requirements still present a compliant selected product');
   await calculate();
   assert(requests.at(-1).body.servings === 60 && get(node => node.type === 'input' && node.props.type === 'radio').props.checked, 'Recalculation discarded valid exact selection');
   checks.push('Serving changes require recalculation and preserve matching selected SKU by stable line ID');
@@ -97,6 +98,16 @@ async function calculate() { get(node => node.type === 'form' && node.props.clas
   assert(!input('Meal plan delivery date').props.required, 'Optional planner deadline became mandatory');
   assert(!render().some(node => node.props.className?.includes('compare')), 'Comparison leaked into Meal Planner');
   checks.push('Optional deadline and planning-only UI preserve intended scope');
+  dietaryConflict = true;
+  await calculate();
+  let conflicted = get(node => node.type === 'input' && node.props.type === 'radio');
+  assert(conflicted.props.disabled && !conflicted.props.checked, 'A retained SKU with missing mandatory evidence still appears selected');
+  conflicted.props.onChange();
+  assert(!get(node => node.type === 'input' && node.props.type === 'radio').props.checked, 'Calling a blocked choice handler bypassed evidence checks');
+  assert(render().some(node => node.type === 'summary' && text(node).includes('No verified suitable product selected')), 'Unresolved dietary selection is not explicit');
+  await get(node => node.type === 'form' && node.props.className === 'paper meal-transfer').props.onSubmit({ preventDefault() {} });
+  assert(Object.keys(requests.at(-1).body.selections).length === 0, 'Unsafe retained selection was sent into the basket');
+  checks.push('Missing gluten-free evidence clears an existing choice, blocks its radio and transfer, and remains visibly unresolved');
   const report = { scope: 'Actual MealPlanner handlers with isolated React hooks and authored API replies; no browser/layout/provider proof', checks_passed: checks.length, checks };
   fs.mkdirSync(path.join(root, '.local'), { recursive: true });
   fs.writeFileSync(path.join(root, '.local/meal-planner-report.json'), JSON.stringify(report, null, 2) + '\n');

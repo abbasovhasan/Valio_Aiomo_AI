@@ -1,881 +1,318 @@
 A4TB - Valio Aimo - WEBSITE CHECK GUIDE
-Prepared 14 November 2026, Europe/Helsinki
+Updated 15 November 2026, Europe/Helsinki
 
 Website: https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site
 Guide on this PC:
 /home/hasan/Documents/ChatGPT/Valio_Aiomo_AI/docs/WEBSITE_CHECK_GUIDE.txt
 
-This guide explains what to click, what to try and what a good result looks
-like. You do not need to know programming. Keep a note of anything confusing,
-missing or incorrect as you go.
-
-Current release checks, 14 November 2026:
-
-  - The final local backend regression suite passed 285 tests in 83.21 seconds,
-    including all 13 actual catalog names longer than 120 characters through
-    a follow-up edit. The production build passed: index-B4p90PsT.js.
-  - The final public B4p90PsT asset and health endpoint were verified. Camera
-    and microphone permissions allow this website itself. Twelve continuity
-    checks passed in 69.561 seconds: accounts, preferences, simulated spending,
-    five QA receipts and older shared receipts survived, with a new protected
-    backup. This continuity run created no orders.
-  - Three final hosted checks passed for the longest actual catalog name
-    (155 characters): two sales packages followed by a EUR 150 budget change
-    retained the same saved request, SKU, full name, quantity and date. Spending
-    stayed unchanged; these checks made no orders, model or supplier calls.
-  - Tracked microphone controls passed 7 isolated async checks; camera controls
-    passed 7 grouped checks. Image normalization passed 8 checks. They use fake
-    hardware to test permission races, cancellation, cleanup and editable review.
-    They do not prove real camera
-    capture, microphone accuracy or a complete browser journey.
-  - Local browser checks exercised six source categories, mixed-case mozzarella
-    search, pagination and returning to preserved Products search context.
-    The 8 kg mozzarella / 12 kg cheddar request and cheaper-item follow-up
-    preserved the other product. Date 17 November survived a budget edit.
-  - Local browser checks exercised uploaded-image extraction into editable text,
-    combined typed input, and pending camera/microphone Cancel controls. Build
-    cart stayed unavailable during pending media work and recovered on Cancel.
-    The final Add/Discard review guard is also covered by the isolated checks.
-  - On the hosted AADxbAJX functional release, desktop 1440x1000 and mobile
-    390x844 had no horizontal overflow. Products appeared as readable mobile
-    cards; navigation, all four inputs, 69 mixed-case mozzarella results,
-    the second page and search-context recovery were observed. No browser
-    console errors or warnings were logged. The public CFFEDfEi image release
-    has also passed 12 continuity checks and 4 automatic-image API checks that
-    confirmed the actual configured vision provider.
-  - After fixing duplicate control keys, the BkM4NY18 build passed four local
-    and two public repeated product-choice changes with exactly two product
-    search forms for two requests. Reload retained the ready EUR 67.20 cart;
-    browser console errors were absent. Clean desktop 1440x1000 and mobile
-    390x844 views had no horizontal overflow and showed all four input methods.
-    The final B4p90PsT change only raises the per-product search limit to 200
-    characters; the tested media and layout are unchanged.
-  - A local provider-outage check kept an initial draft unpriced and blocked
-    confirmation. Refreshing the same saved cart after recovery produced a
-    real EUR 1.15 quotation and a ready state; no fixture fallback was used.
-  - A local 40-diner meal check with 8 vegetarian, 4 gluten-free and 2 needing
-    both produced groups 30/2/6/2, then handed off 11 ingredient requests with
-    date 17 November and budget EUR 500. Chef review and missing hard evidence
-    still blocked confirmation as required.
-  - The latest local browser image check read a 4200x3300 JPEG (13.86 million
-    pixels, 338,326 bytes) into correct editable shopping-list text through the
-    automatic image reader. No provider selector or consent checkbox appeared.
-    A 5,242,881-byte original was rejected with the 5 MB message and no stuck
-    loading state. This proves the uploaded-image flow, not a phone camera.
-  - The CFFEDfEi public browser check read that same high-resolution image into
-    editable text. Changing butter from 5 to 4 kg kept Build cart unavailable
-    until Add to request; adding preserved typed context, delivery date
-    17 November and budget EUR 200.
-  - The user has confirmed a correct real microphone transcript on the public
-    website, including their accent. That report used the previous hosted
-    microphone label; it is prior hardware evidence, not proof of every new
-    release, accent or environment.
-  - After reloading the public CFFEDfEi image release, the owner confirmed: "Yes, the
-    photo works and text is editable." The same photo below 5 MB no longer
-    produced the 12-megapixel error, and no reader selector or checkbox was
-    required. This is a successful physical phone/photo retest, not a general
-    camera, handwriting or image-reading accuracy measurement.
-
-Final public-release, mobile and device checks are recorded in
-FINAL_QA_REPORT.md beside this guide. Do not treat these local checks as proof
-that every step below passed on the latest public deployment.
-
-Prior deployed verification record (before the latest catalog/history/camera update):
-
-  - The earlier extended core was deployed at the website above. Its observed
-    asset was index-C67pl32K.js; this is a historical build, not a Git commit.
-  - 171 backend tests passed, and the production frontend build passed.
-  - 47 checks through the hosted application passed, including private
-    accounts, cookie lifetimes, preferences/isolation, cart changes, separate
-    manager approval by API, simulated receipts, local OCR/audio and live
-    NVIDIA/Valio reads.
-  - A pre-existing receipt survived the deployment. The shared demonstration
-    spending ledger was preserved and left unchanged by these hosted checks;
-    their simulated commitments used a separate registered QA workspace.
-  - A local browser check combined an image and an authored audio clip into
-    editable order text, exercised a product filter, recorded a EUR 14.00
-    simulated receipt and recovered it after reload. Its requested date was
-    explicitly corrected to 17 November 2026 before confirmation.
-  - The user separately tested the real microphone on the public website and
-    reported that the transcript was correct, including their accent. This
-    is one user-reported real recording success, distinct from authored-clip
-    automated checks and not a general speech-accuracy measurement.
-
-  - The private-manager local browser journey also passed: an expired quote
-    blocked approval until the buyer refreshed it; the separate manager then
-    approved the exact EUR 1,725 cart, the buyer confirmed it, and the saved
-    receipt showed the approver/time and passed verification.
-  - The recipe overlap browser check passed: for 500 diners, 100 vegetarian
-    and 50 gluten-free, entering 20 and "Apply overlap" cleared the question
-    and recalculated 10 ingredient requirements into 11. The editable default
-    meal plan also displayed the expected 370/30/80/20 diner cohorts.
-
-  - The saved Meal planner -> Smart order browser bridge also passed: the
-    default plan transferred as 11 ingredient requests with the exact date
-    17 November 2026. It required fresh chef acknowledgement, recorded that
-    acknowledgement, and still blocked confirmation for missing dietary claims.
-  - Desktop 1440x1000 and mobile 390x844 receipt views were visually inspected
-    without horizontal overflow. The native filter control was tested by
-    keyboard.
-
-The historical 171-test / 47-hosted-check record above is separate from the
-latest 285-test local regression result. Counts overlap and must not be added.
-The Products, History and four input-method steps below remain review
-instructions, not a claim that the updated public release passed every step.
-
-The steps below remain a checklist for your own review, not a promise that
-every device, accent, image, sort combination or possible purchasing request
-was tested. A blocked meal caused by missing evidence is not a completed
-purchase, and no recipe acknowledgement can make an unknown claim true.
-
-The application is a challenge prototype. Every order is simulated. It does
-not place a Valio Aimo order, reserve stock, issue an invoice or take payment.
-
-
-1. OPEN THE WEBSITE AND SIGN IN
-
-Open the website above. On a phone, open the navigation menu if needed.
-Choose "Smart order".
-
-Click the upper-right profile button, labelled "Account and sign-in" for
-assistive technology. Before sign-in it shows "Open your desk". The window is called
-"Sign in". Enter the private buyer code in "ACCESS CODE", then
-click "Open this session". The profile should now identify the buyer role.
-
-Where to find the codes privately:
-
-  The project owner can open this file on the prepared computer:
-  /home/hasan/Documents/ChatGPT/Valio_Aiomo_AI/.local/access.json
-
-  The file contains a "buyer" value and a separate "approver" value. In the
-  file manager, Ctrl+H shows hidden folders such as .local. Copy only the
-  required value into the website's password field. Do not paste either code
-  into chat, this guide, screenshots or a public document.
-
-  A deployed installation may have separately configured codes. If the local
-  code is not accepted, ask the project owner for the current deployment's
-  buyer or approver code through an appropriate private channel.
-
-You can also create your own private demonstration workspace:
-
-  - In the sign-in window, choose "Create workspace".
-  - Enter "Your name", a "Username" (3-40 supported characters) and a
-    "Password" of 12-128 characters.
-  - Enter the installation's private buyer code in "Buyer invitation code".
-  - Click "Create my workspace". No email address is required.
-  - Later, use "Account sign-in", your username/password and "Sign in".
-
-The invitation creates an isolated demonstration workspace. It is not a
-Valio Aimo customer registration or contract. Your saved preferences, cart,
-simulated spending and receipts belong to that workspace. Two accounts must
-not see or change each other's private records.
-
-"Remember me for 30 days on this device" is optional. With it checked, the
-browser receives a persistent sign-in cookie with a 30-day server expiry.
-Without it, the cookie is for the browser session and the server expiry is
-8 hours. Browser session-restore settings can retain session cookies; use
-"Sign out" to revoke the session explicitly. Neither choice saves your
-password in this application's local storage.
-
-The buyer creates and edits carts and confirms permitted simulated orders.
-The approver can approve an exact eligible cart but cannot act as its buyer.
-Changing a label or describing yourself as a manager does not grant that role.
-
-If an old cart reopens, click "New request" before beginning a fresh example.
-This starts a new cart; it does not erase previously recorded receipts.
-
-
-2. START WITH A SMALL MIXED ORDER
-
-For a predictable first check, enter:
+This is a review checklist, not a claim that every device or example passed.
+Current refinement evidence is in ROLE_DEMO_REFINEMENT_QA.md beside this guide.
+PRODUCT_REFINEMENT_REPORT.md records the current deployed build and checks.
+FINAL_QA_REPORT.md also preserves clearly labelled earlier-release evidence.
+Reload once if an already-open tab still shows the previous interface.
+All orders are simulated. No supplier order, reservation, invoice or payment
+is created. Use only nonconfidential examples in the shared demonstration.
 
-  I need 20 litres of lactose-free milk and 10 kg of cheese delivered by
-  Monday. Choose the cheapest suitable products.
 
-Set "Delivery date" before ordering and optionally enter "Maximum budget (€)".
-Enter the date first, then the budget: the date must stay visible and both
-values must reach the resulting cart. Later changes can be applied from the
-early controls using "Apply", or in the cart using "Apply requirements".
-Click "Build cart". Ordinary customer ordering does not require choosing an AI
-provider or debugging source. Actual quotations may change; inspect their source.
-If the owner enabled optional "Demo settings", an authored fixture can be used
-for a repeatable check. Fixture prices must remain labelled as demonstration data.
+1. ENTER AS BUYER OR APPROVER
 
-Look for these results:
+Open the account button and the "Sign in" dialog.
 
-  - Milk and cheese appear as two separate requests.
-  - The milk retains its lactose-free requirement.
-  - Product cards show actual catalog names and SKU numbers.
-  - Each card shows the sales package, order quantity, quantity after rounding,
-    sales-unit price and line total.
-  - A selected card has a "Selected" mark and an explanation of the selection.
-    A selected request with a constraint problem must still say "Needs review"
-    and retain the actual warning; selection alone does not mean it is valid.
-  - The right-hand shopping cart contains the selected products.
-  - The quotation source is labelled accurately; demo prices are not live prices.
+  - Select the "Buyer" card to enter the shared purchasing workspace.
+  - Select the "Approver" card to enter its paired "Approvals" workspace.
+  - No access code is required for these two cards.
+  - "Remember me for 30 days on this device" is optional for either role.
 
-The system may ask you to "Choose" a suitable product. Click a valid candidate
-rather than guessing its name in a message. A blocked candidate must explain
-why it cannot be chosen.
+Quick roles exist only when the server enables the controlled demo. If disabled,
+standard account sign-in remains available; the browser must not grant itself a
+role. The shared quick-demo pair is separate from private accounts and the old
+Aurora demonstration. Do not put personal or confidential information in it.
 
-The fixture prices and stock are authored test values. The product identities
-and specifications come from the supplied challenge catalog. "Cheapest" means
-lowest rounded item subtotal among the retrieved compliant candidates; it is
-not a guarantee of the cheapest possible basket across the entire catalog.
+Use "Switch role", or reopen the account dialog, to change perspective. Check
+that the displayed role matches the workspace and allowed actions. Buyer can
+edit purchasing requests; Approver reviews exact requests and cannot buy.
 
-Next, if useful, try the "Stock the breakfast kitchen" example. It requests
-200 litres of lactose-free milk, 10 kg of butter and 5 kg of cheese. Check all
-three groups. An inconsistent or missing package conversion should produce a
-visible issue, not an invented quantity or a silently accepted huge package.
+Reload in each role. The correct identity should recover. Sign out, reload and
+try a protected action: it should require sign-in. Rapidly switching roles or
+closing/reopening sign-in must not restore the previous role's permissions.
 
 
-2A. SEARCH THE PRODUCTS WORKSPACE
+2. KEEP STANDARD AUTHENTICATION AVAILABLE
 
-Open "Products". Set a delivery date and optional budget before adding items.
-Search for "cheese" in "Search products". Check the result count and use
-"Next"/"Previous" to inspect additional pages; a matching category must not
-collapse into an arbitrary single recommendation.
+Choose "Use an account" for these secondary options:
 
-Try a partial product name, different capitalization, a real SKU, a category
-and "Filters" for brand/origin/verified dietary claims. Reset the filters and
-try an absent name: it should show "No matching products", without inventing any.
+  "Account sign-in" - your existing username and password.
+  "Create workspace" - name, username, 12-128-character password and the private
+                       buyer invitation code; no email is required.
+  "Access code"      - the original buyer/approver code path.
 
-Active filters stay visible as removable chips even when "Filters" is closed;
-its heading shows the filter count. Use the visible "Reset filters" before
-trying a different product category. Saved dietary and ingredient exclusions
-appear under "Mandatory food requirements applied" and remain active after
-this reset. Manage them deliberately in "Buying preferences".
+The owner can read codes privately from:
+/home/hasan/Documents/ChatGPT/Valio_Aiomo_AI/.local/access.json
 
-Move to "Smart order" and back to "Products". The search, filter, selected
-product and page should remain where you left them.
+Ctrl+H shows hidden folders. Copy a code only into the website; never paste it
+into chat, screenshots or this guide. Deployment codes can differ from the local
+file. A workspace ID alone must grant no permissions.
 
-Also try a real catalog product with a long full name. Select it and make a
-follow-up change; the name must not be cut off or rejected. The per-request
-"Product search" field accepts up to 200 characters.
-
-Click "Select" on a product. Inspect its package and "Product details".
-Set "Quantity" and "Unit": sales packages, kg required, litres required or
-pieces required. Check the rounded sales-package count and total, then click
-"Add to cart". Change quantity, replace the product or remove it from the cart.
-Other selected products should stay intact. A missing price should say
-"Requires quote"; it is not zero. Eligible products can remain in a draft,
-while confirmation requires verified prices, availability and hard restrictions.
+For a private buyer's approval, use "Approve this workspace", then the separate
+manager access code with the intended workspace ID. The public Approver card
+opens only the quick-demo workspace, not another buyer's private records.
 
-Under "Buying preferences" -> "Mandatory food requirements", try "No pork"
-and a peanut exclusion separately. Save, search again and inspect alternatives.
-Known violations and unknown compliance must never appear verified safe.
-Mandatory restrictions remain enforced when optional preferences are off.
-Clear test restrictions deliberately before starting an unrelated example.
-
+Test Remember Me checked and unchecked. Checked uses a persistent 30-day cookie;
+unchecked uses a browser-session cookie and an eight-hour server expiry. Browser
+session restoration can retain cookies. "Sign out" explicitly revokes access.
 
-2B. REOPEN, REUSE AND ORGANIZE HISTORY
 
-Create a request, then open "History". Click its title to reopen it and check
-the saved quantities and choices. "Reuse" should create a separate draft;
-review its date, budget and fresh quotation before considering confirmation.
+3. START A SMALL ORDER WITH DELIVERY AND BUDGET
 
-Click "Archive", enable "Show archived requests", and use "Restore". Reload
-to check persistence. Use the remove icon and confirm "Remove from history"
-on a disposable example. It should leave your personal list, while recorded
-orders and required audit evidence remain retained. Another buyer workspace
-must not gain access to these entries.
+Enter as Buyer. Set "Delivery date" within the next 30 days and optionally
+"Maximum budget (€)" before ordering. Try:
 
+  I need 8 kg of mozzarella and 12 kg of cheddar.
 
-3. CHECK QUANTITIES AND PACKAGE ROUNDING
+Click "Build cart". Check that both requirements have their own quantities and
+units. Choose eligible actual products where a decision is required. Prices and
+stock must use the displayed source; "Requires quote" never means zero.
 
-Under a requested product, inspect "Required quantity". Change the number and
-click "Update". The product quotation and cart should be recalculated.
+Try a conversational update, such as reducing only one item. The other item,
+its selection, hard restrictions and the delivery date should remain intact.
+Use quantity "Update", replace a product and remove a request. Totals and
+package surplus should update. A missing product or unsupported conversion
+must produce an honest question or blocker.
 
-You can also make a conversational change. In the request box enter:
-
-  Reduce the cheese to 5 kg.
+Use a very low budget, then correct it explicitly. A hard customer budget cannot
+be waived by an Approver. Date changes must update quotation and final review;
+unknown or later availability must not become a promised delivery.
 
-Click "Update cart". The cheese quantity should change while the milk
-quantity, lactose-free rule and unrelated selections remain intact.
-
-For the breakfast example, try:
+The cart summarizes requested delivery and maximum budget. "Edit requirements"
+returns to the authoritative request controls; there should not be a second
+conflicting date/budget editor in the cart. A purchasing-policy limit is separate
+from your item budget: increasing that budget cannot grant more authority or
+replenish the workspace's simulated spending allowance.
 
-  Reduce the butter to 5 kg.
 
-Where whole packs supply more than requested, look for "extra from whole
-packs". The cart should show requested and ordered quantities and the surplus.
-Do not assume litres and kilograms are interchangeable.
+4. SEARCH DIFFERENT REAL PRODUCT CATEGORIES
 
-If the same product supplies more than one recipe group, the purchasing cart
-must consolidate that product before rounding. The final cart quantities are
-the authoritative shopping quantities; do not add separate candidate estimates
-together yourself.
+Open "Products". Try cheese, a different available food family and a nonfood
+foodservice item. Also try mixed capitalization, a partial name and an actual
+SKU. Check the total and use Next/Previous. Matching inventory must not collapse
+into one arbitrary recommendation.
 
+Open "Filters" for category, brand, required origin or a verified dietary claim.
+Remove an active filter or reset all. Try an absent product name and confirm a
+clear empty state. Category codes are supplied without translated category names.
 
-4. COMPARE AN ALTERNATIVE OR REFINE A PRODUCT SEARCH
+Try Sort: "Best match", "Name · A to Z" and "Name · Z to A" cover the filtered
+catalog. Price per sales unit/kg/L and earliest available date explicitly apply
+to "this page", since the whole catalog has not been quoted. Unknown values
+must stay last, not become zero. "Available on this quoted page" narrows only the
+currently quoted page; the catalog match count should remain distinguishable.
 
-Open "Product evidence" on a candidate. Where supplied, it shows the brand,
-manufacturer, declared origin, dietary/organic evidence, ingredients, allergen
-declarations and storage instructions. It also shows package evidence, available
-quantity, the estimated available date, historical delivered quantity, catalog
-source and catalog update time.
+Products has its own "Use saved optional preferences while browsing" control.
+Change a Products filter/sort, then return to Smart order: its filters must not
+have changed. Repeat in the other direction. Saved mandatory food restrictions
+remain global, and the selected cart must survive either page's browsing changes.
 
-Unknown information should remain unknown. A catalog update date is not proof
-of current stock. Historical delivered quantity is not an on-time guarantee.
-Allergen supplier codes may remain visible when their meaning is not supplied;
-missing declarations must not be presented as proof that an allergen is absent.
-Open "How the package conversion is supported" to inspect its recorded basis.
-A category-average carbon estimate, where shown, is not a measured product
-footprint or a measured saving.
+Click "Select", enter quantity/unit and inspect the quotation, then "Add to cart".
+The selection should remain editable even when pricing needs a quote, while
+confirmation stays blocked until commercial facts are verified.
 
-Open "Sort & filter products" on an ingredient request. Try "Sort by":
+The owner has source-derived examples in .local/role-demo-cases.json: a 75-cl
+syrup, measured-weight KG product, milk alternatives and two additional actual
+categories. These private examples are for checking the real catalog, not a
+fixed product list built into the application.
 
-  - "Suggested order".
-  - "Item subtotal - lowest first".
-  - "Price per [requested unit] - lowest first".
-  - "Brand - A to Z".
-  - "Declared origin - A to Z".
-  - "Available date - earliest first".
 
-The actual UI uses a separator between each label's two parts. Unknown prices,
-brands, origins or dates sort after known values. The selected product remains
-pinned so it is not lost when you sort.
+5. UNDERSTAND PACKAGES, MEASURED WEIGHT AND PRICES
 
-Try "Brand", "Origin includes", "Declared attributes" and
-"Compliant choices only". Attribute filters require explicit supplied claims;
-unknown does not mean a match. Check the "X of Y products match" count. If the
-selected product falls outside the filter, it must remain visible with a
-notice. "Reset view" clears the view settings. No result should explain the
-empty filter and offer a reset, rather than silently change your order.
+Where verified volume exists, look for a concise calculation such as:
 
-The first four candidates are shown initially. "Compare N more products"
-opens the rest. Every returned product should remain inspectable and, when
-valid, selectable. Sorting and filtering only change the view; they do not
-relax hard constraints or change your cart by themselves.
+  2 sales packages × 0.75 L = 1.5 L ordered for 1 L requested.
 
-Prices and recommendations cover the retrieved candidates and rounded
-quantities. They are not proof of the cheapest possible basket across the
-entire catalog. A "Basket change" figure is meaningful only when the server
-supplies a valid full-basket comparison; do not invent a difference otherwise.
+Check package price, price per litre/kg, total and surplus against the same
+quantity basis. Whole fixed packages must respect the supplier's lot increment.
+For measured KG sales, fractional weights are valid where metadata supports
+them: 1.5 kg with a 0.01-kg increment should stay 1.5 kg. A 1.2-kg increment
+rounds a 1.5-kg request up to 2.4 kg, not six whole kilograms.
 
-Click "Choose" on another suitable candidate. Check that the cart, price and
-selected mark update without removing the other requested products.
+Internal codes such as KI have no supplied translation. They belong in Sources,
+not an invented "case" label. Kilograms ordered are not fractional packages.
+"Consumer units" do not automatically mean individual contents of a multipack.
+Missing/contradictory conversions, variable weight and unsupported charges must
+remain explicit rather than being guessed. Litres and kilograms are not
+interchangeable without independent metadata for each dimension.
 
-To search for a more suitable product, edit "Product search" on the relevant
-request and click "Find products". For example, refine a broad cheese search
-to "cheddar".
+Item subtotals include tax. Delivery/service charges remain excluded where
+unknown; availability is not a reservation.
 
-Expected result: only that product search changes. Its required quantity and
-hard dietary/origin requirements stay in place. A cheaper substitute must not
-silently waive a hard requirement.
 
-To remove an item deliberately, use its bin icon ("Remove" followed by the
-product request). The cart should update and unrelated items should remain.
+6. COMPARE ANY TWO OR THREE AND OPEN DETAILS
 
+On Smart order or Products, tick "Compare" on any two actual products. Selecting
+must not immediately open a dialog or change the cart. Click "Compare (2)" to
+open it; add a third to try "Compare (3)". Products can come from different
+categories or later searches/pages. A fourth should offer explicit "Replace"
+choices and Cancel rather than silently dropping an earlier choice.
 
-4A. SAVE YOUR USUAL BUYING PREFERENCES
+Inspect aligned quantities, sales-unit price, valid price/kg or price/L, stock,
+date, brand, origin, nutrition basis, ingredients/allergens and unknown fields.
+Different categories need not be substitutes. No kg-to-litre density assumption
+or a supposed cheapest product across an unquoted catalog is acceptable.
+"Refresh quotes" should retain the compared products while updating evidence.
 
-Open "Buying preferences" below the request composer while signed in as buyer.
-Try a "Purchasing priority": balanced comparison, lowest rounded item cost,
-manual quality-specification review, preferred origin, or earliest verified
-availability. You can also set "Preferred brand", "Preferred origin" and
-"Prefer verified organic products". Click "Save preferences".
+Use "Remove", "Change", per-item "Details" and "Clear comparison". Smart order's
+"Choose for this request" changes only that requirement; Products' "Add to cart"
+adds the preferred item. The comparison list itself is independent of the cart,
+and each page keeps its own list. No comparison controls belong in History or
+the Meal planner. Current source assets have no supplied product photos: a
+neutral missing-image treatment is honest, not a picture of an invented product.
 
-Reload and check that the saved values return in the same buyer workspace.
-Start "New request". "Use saved optional preferences for this new request" controls
-whether those soft defaults are applied. Explicit request instructions and
-hard dietary, origin, brand and budget requirements take priority.
+Display several alternatives ("Show N more alternatives" expands a shortened
+list). Note their positions and selected state. Click "Product details" on one
+product.
 
-Saving optional brand/origin/organic/priority defaults must not rewrite a cart
-already under review. Saving mandatory food requirements does recheck the
-current unconfirmed cart and can block products that no longer meet them.
-Use "Other excluded ingredients" for up to eight specific exclusions. There
-is no general note editor promising unsupported automatic preferences.
-"Clear saved preferences" resets the saved defaults; it does not delete orders.
+The shared "Product details" drawer should slide in from the right on desktop;
+on a phone it opens as a bottom sheet. Its compact header shows Product details
+and SKU; the full product name appears once in the scrollable body. Cards must
+keep their layout, without a very tall card or an empty column. Inspect overview,
+purchasing, specifications, ingredients/allergens and Sources & package evidence.
 
-To check isolation, sign into a different private workspace. It must not load
-the first buyer's preferences or saved-cart pointer. Sign back into the first
-workspace to recover its own records. The shared demonstration is intentionally
-shared by people using the same demonstration code.
+Check supplied brand, SKU, physical size, requested/rounded quantities, price,
+availability/date, manufacturer, origin, claims, storage and evidence. Missing
+facts must remain unknown. Positive allergens, may-contain statements and explicit
+free-from declarations are different. Lactose-free is not milk-allergy safe.
 
+Scroll the drawer's content, and use Tab/Shift+Tab, the close button, Escape and
+the backdrop to check native modal behavior. Focus should return predictably;
+comparison position/choices and cart contents/totals must not change merely from
+opening details. The independent Compare dialog keeps its own layout. Repeat on
+a phone-sized viewport and confirm the sheet stays usable above the screen edge.
 
+Try sorting and filtering alternatives. Unknown fields must not become verified
+matches. The chosen product should remain visible or pinned, even outside a
+filter. Repeated Choose actions and reload must not duplicate search controls.
 
-5. CREATE AND RESOLVE A BUDGET CONFLICT
 
-In the shopping cart, enter a deliberately low value such as 1 in
-"Maximum budget (EUR )". Click "Apply requirements".
+7. SAVE MEANINGFUL RESTRICTIONS AND OPTIONAL PREFERENCES
 
-Expected result:
+Open "Buying preferences". Use "Mandatory food requirements" for a hard diet or
+allergen exclusion; try No pork and a peanut exclusion separately. Save and
+search/build again. Known violations and unknown safety must not appear safe.
+Mandatory restrictions remain enforced when optional defaults are unchecked.
 
-  - The budget balance shows that the selected items exceed the budget.
-  - The reason is explained.
-  - "Review & confirm" is unavailable.
-  - The application does not quietly remove items or increase the budget.
+Optional brand/origin/organic/priority choices guide results; they do not create
+missing certifications or alter spending authority. Explicit request rules take
+precedence. Clear a saved-only restriction, re-quote and check it clears from the
+same cart; an explicit restriction in the request must remain.
 
-Correct the budget by entering an amount above the displayed item subtotal,
-or remove the optional budget value. Click "Apply requirements" again.
-Alternatively, reduce quantities or choose cheaper compliant products.
 
-The hard customer budget and the buyer's purchasing authority are different:
-raising your budget does not grant the buyer more approval authority.
+8. PASS AN EXACT REQUEST BETWEEN BUYER AND APPROVER
 
-"Item subtotal" includes quoted item prices and tax. Delivery and service
-charges are excluded from this simulation. It is not a final commercial bill.
-A partial cart must clearly say that requests still need attention.
+Use the quick Buyer card for this scenario. Create a valid basket above the
+current autonomous threshold and within its approval/cumulative ceilings. With
+normal authored defaults, these are €1,400 /€2,500 /€6,000. A suitable 1,500-L
+milk example may require approval, but the actual SKU/quote decides the subtotal.
+Do not assume every product or live price has the same cost.
 
+The Buyer should see "Purchasing approval needed" and be unable to approve it.
+Switch role to Approver. In "Approvals", click "Review request" on that exact
+basket. Review products, quantities, date, subtotal, expiry and product details.
 
-6. CHECK DELIVERY AND EXPIRED QUOTATIONS
+Try "Decline basket" with an optional reason. Switch to Buyer and use
+"Refresh status": the reason/revision path should appear and confirmation stay
+blocked. Refresh status is read-only; it does not create a new quote or order.
 
-Check "Requested delivery" in the cart. Choose a valid date and click
-"Apply requirements". Delivery estimates must relate to that date.
+Revise the basket deliberately. Switch to Approver, review the new exact version
+and "Approve basket". Switch back to Buyer and read status again. Changing
+quantity, product, date or price must invalidate stale approval. Expired quotes
+must be refreshed by Buyer before a fresh decision. Approver cannot bypass a
+hard budget, missing stock, unknown required evidence or another hard blocker.
 
-Use a date from today through the next 30 days. On 14 November 2026, the next
-Monday is 16 November 2026. On later test days, choose an appropriate current
-date instead of reusing an expired example.
+This test can stop with approval: no high-value confirmation is necessary.
+Demo re-entry must not reset spending or the saved decision history.
 
-A missing or invalid date, unavailable stock or unsupported delivery date
-should keep the full cart from being confirmed.
 
-A quotation is short-lived. Leave an otherwise ready cart open until its
-shown validity time passes. It should show that the quote expired and prevent
-approval or confirmation. Click "Refresh prices & availability", then review
-the current quotation. Refreshing creates a fresh decision; previous exact
-approval must not automatically apply to changed facts.
+9. REVIEW ONE SMALL SIMULATION ONLY WHEN DESIRED
 
-For a faster controlled stale-offer example, open "Trust scenarios", choose
-"The offer changes", click "Send to buyer agent", and use
-"Refresh this exact offer".
-The comparison should explain what changed.
+For a complete permitted small cart, choose "Review & confirm" and inspect its
+exact items, quantities, date and subtotal. "Confirm simulated order" records a
+simulation only. Repeated requests with the same key must not create duplicates.
 
+Inspect the generated receipt/reference and "Verify receipt". Verification is
+read-only; reload should recover the same saved result. This is gateway-record
+consistency, not a supplier confirmation, invoice or proof of delivery. Repeated
+simulations consume the workspace's synthetic spending allowance.
 
-7. TEST THE 500-DINER MEAL REQUEST
 
-In "Smart order", click "New request" and choose "Bolognese for 500 diners".
-Its request includes 20% vegetarian diners, 10% gluten-free diners and an
-overlap of 20 diners who need both. Click "Build cart".
+10. CHECK TYPE, VOICE, IMAGE AND CAMERA
 
-Expected result:
+  "Type a message" - focus and edit the request.
+  "Voice input"    - allow microphone, speak, Stop & transcribe; Cancel discards.
+  "Upload image"   - select an existing JPEG/PNG shopping-list image.
+  "Take a photo"   - native phone camera or desktop preview/Capture photo.
 
-  - The meal expands into ingredient requests with quantities.
-  - The proposed recipe is labelled as illustrative and needs chef review.
-  - Gluten-free and vegetarian requirements remain visible where required.
-  - Unsupported products or dietary evidence produce honest conflicts.
-  - The application does not claim the complete meal can be purchased merely
-    because some ingredients matched.
+Voice stays bounded to 30 seconds. Original images must be at most 5 MiB; normal
+high-resolution photos under that size are normalized before secure processing.
+A larger original must be rejected clearly without a stuck loading state.
 
-Review the recipe and click "I have reviewed the proposed recipe" only after
-you have actually reviewed it. This records a review; it is not a food-safety
-certification. Unresolved product requirements must still block confirmation.
+Review and correct "Editable extracted text" before "Add to request". Adding
+must preserve existing typed text/date/budget, and Build cart must wait until
+reviewed text is actually added. Discard/Cancel must leave the request usable.
+There is no audio-file upload option; live microphone processing is preserved.
 
-Also try a request that mentions vegetarian and gluten-free percentages but
-omits the overlap. The assistant should ask how many diners need both, rather
-than assume an overlap silently. In "Diners who need both diets", enter 20 and
-click "Apply overlap". Enter 0 only if the groups do not overlap. Check that the
-question clears and the ingredient requirements are recalculated. If you
-provided a valid overlap already, it should not ask the same question again.
+Image reading is automatic using the configured NVIDIA reader; no provider menu
+or manual cloud checkbox is needed. Use nonconfidential demonstration images.
+Any offline fallback must name its actual source honestly. Voice uses local
+speech recognition. Permission denial, absent hardware, corrupt files and camera
+closure should offer useful typing/upload recovery and stop unused media streams.
 
-This direct overlap correction was observed in the local browser: the question
-cleared and the saved ingredient requests changed from 10 to 11. That is a
-recalculation result, not a claim that all dietary products became available.
 
+11. REOPEN HISTORY AND CUSTOMIZE A MEAL PLAN
 
-8. TRY THE EDITABLE MEAL PLANNER AND ITS SHOPPING-CART HANDOFF
+In "History", open a request, reuse it as a fresh draft, archive/restore it and
+remove a disposable entry. Reload to check persistence. Removal hides personal
+history metadata; recorded orders and required audit evidence remain retained.
+Different private accounts must not see each other's entries.
+Buying preferences should not appear inside History.
 
-Choose "Meal planner". Keep or enter:
+Open "Meal planner" / "Plan a meal". Start with "Meal name" and "Servings".
+Spaghetti bolognese is an explicitly illustrative, unverified example; another
+dish should start an editable custom list, without inventing a verified recipe.
+Expand "Dietary requirements" or "Ingredient preferences" when needed.
 
-  Total diners:                       500
-  Vegetarian diners:                  100
-  Gluten-free diners:                  50
-  Both vegetarian & gluten-free:       20
+Generate the plan and inspect "Your ingredients". Use "Add ingredient", edit an
+ingredient search, grams per serving and "Use for", or remove a row. Recalculate
+after changes; dirty quantities must not transfer as an unchanged plan. A valid
+selected SKU should survive unrelated edits through its ingredient/cohort ID.
 
-Click "Build shopping plan". Check that the four groups are:
+For the example, try 40 servings, 8 vegetarian, 4 gluten-free and 2 needing both.
+Expected groups: 30 /2 /6 /2, counted once each. Check exact displayed kilograms.
+Expand catalog choices when desired; quantity calculations alone do not prove
+price, stock, dietary suitability or recipe safety.
 
-  Meat standard:             370
-  Meat gluten-free:           30
-  Vegetarian standard:        80
-  Vegetarian gluten-free:     20
+Choose "Add ingredients to cart" and inspect "Delivery, budget & pricing".
+If another cart exists, require the explicit handoff decision before replacing
+it. Exact ingredients, restrictions, date and budget should reach a separate
+Smart order draft. Fresh chef acknowledgement and unknown hard dietary evidence
+must still block unsafe confirmation. This step creates a draft, not an order.
 
-Every diner should be counted once. Try an impossible overlap larger than a
-dietary group; the form should explain the inconsistency.
+"Demo tools" retains Data & model settings, Trust scenarios, Decision recorder,
+Gateway API and About trust. The old Aurora trust lab is a separate mandate;
+quick-demo/private accounts must not silently acquire it. Standard owner-issued
+access codes are still available where that legacy demonstration is intended.
 
-Review the editable grams per diner under "Review the recipe". Change a
-quantity or diner count and confirm that export/quotation requires rebuilding
-the plan. The source label should change appropriately when you enter your
-kitchen's own quantities. You can also try the optional carrot addition.
 
-Select any draft product candidates you wish to carry forward. You do not
-need to choose a product for every ingredient at this stage. Candidate search
-now considers the ingredient purpose, declared claims and sourcing evidence,
-but a search result is still a proposal for chef review. Missing dietary
-claims or inconsistent package facts may leave an ingredient unresolved.
-Changing the purchasing priority does not create a verified quality score.
+12. FINISH THE DESKTOP, MOBILE AND KEYBOARD REVIEW
 
-In "Quote shopping plan":
+Check major screens at 320, 375, 390 and 430 px, then tablet/desktop. Inspect
+sign-in/registration, Buyer, Approver, Products, product details, preferences,
+History, meal planner, cart and review/result. On a narrow screen, use the mobile
+Cart control; it should open a usable dialog instead of a cramped sidebar.
 
-  - Set "Requested delivery".
-  - Optionally set "Maximum budget (EUR )".
-  - Keep "Quotation source" as the rehearsal fixture for a repeatable check.
-  - Click "Quote this shopping plan".
+Look for overflow, clipped text/buttons, touch-target problems, stuck loading,
+misaligned cards and missing selection/error feedback. Use Tab/Enter/Space and
+Escape; focus should remain visible and dialogs should close predictably. A
+viewport check alone does not prove behavior with every phone's real keyboard.
 
-The website should open "Smart order" with that saved plan's ingredient
-quantities, dietary requirements, sourcing rules and chosen candidates.
-Shared products should be consolidated before final pack rounding. You can
-refine "Product search", choose candidates and resolve remaining conflicts.
-
-Observed browser result: the saved default plan transferred without requiring
-manual candidate selections, retained all 11 ingredient requests and kept the
-explicit 17 November 2026 date. Required amounts included 45 kg standard pasta,
-5 kg gluten-free pasta, 44.4/3.6 kg beef for the two meat cohorts and 5.6/1.4 kg
-lentils for the vegetarian cohorts. Availability evidence showed 17 November.
-These are ingredient requirements, not a claim that every product was ordered.
-Fresh chef acknowledgement was required and could be recorded. Missing dietary
-claims still kept confirmation blocked after that acknowledgement.
-
-"Export draft shopping plan (JSON)" remains a draft export. Exporting the
-file does not place or confirm an order.
-
-
-9. CHECK SEPARATE MANAGER APPROVAL
-
-Run this once in the fixture, after the smaller tests. Repeated confirmed
-orders consume that buyer workspace's simulated spending allowance.
-
-Start "New request" as buyer and enter:
-
-  I need 1500 litres of lactose-free milk delivered by Monday.
-  Choose the cheapest suitable product.
-
-With the default demonstration policy and fixture SKU 464306, the expected
-item subtotal is EUR 1,725.00. Check the selected SKU and displayed price; do not
-assume that a different product or live quotation has this same amount.
-
-The default autonomous limit is EUR 1,400.00 and the exception ceiling is
-EUR 2,500.00. The cart should therefore show "Purchasing approval needed", and
-the buyer must not be able to approve it personally.
-
-Click "Sign in as approver". Enter the separate approver code in the sign-in
-window and click "Open this session". Review the exact product, quantity,
-price, date and remaining issues, then click "Approve this exact cart".
-
-Switch back to the buyer identity using the profile button and buyer code.
-The same saved cart should reopen. It should show that this exact cart has
-manager approval. Only the buyer can continue to confirmation.
-
-Before confirming, optionally change the quantity or date. The old approval
-must be cleared because the approved cart has changed. Obtain fresh approval
-for the new exact cart if its value still requires it.
-
-For a private registered workspace, open your profile and click
-"Approve this workspace". It pre-fills "Manager workspace ID (optional)" in
-"Demo access". Enter the separate approver code and click "Open this session".
-Review and approve the exact cart in that workspace, then return through
-"Account sign-in" with the buyer's username and password to confirm.
-
-If the quote expires during the handoff, approval must stay blocked. Return
-as buyer, click "Refresh prices & availability", review the fresh exact cart,
-then return as manager for a new approval. The manager cannot refresh or edit
-the buyer's requirements merely to bypass expiry. This expiry -> refresh ->
-exact approval -> buyer confirmation -> receipt verification sequence passed
-the recorded local browser check for a EUR 1,725 private cart.
-
-A workspace ID alone grants no permissions, and entering the buyer code must
-not turn the buyer into an approver. Leave the manager workspace field blank
-only when intentionally returning to the shared demonstration.
-
-Hard-rule failures are different from budget approval. A manager must not be
-able to approve missing stock, an invalid conversion, a hard dietary failure
-or an exceeded hard customer budget.
-
-The cumulative cap is EUR 6,000.00 by default in each buyer workspace. The
-shared demonstration is one such workspace. If earlier checks used its cap
-up, ask the owner to prepare a clean demonstration ledger; do not expect a
-buyer or approver button to bypass it. Operator settings may change these
-demonstration thresholds.
-
-
-10. CONFIRM AND VERIFY A SIMULATED RECEIPT
-
-Use a complete, permitted cart with any required approval obtained.
-
-Click "Review & confirm". Review the products, item subtotal and requested
-date. Then click "Confirm simulated order".
-
-Expected result: "Simulated order recorded." appears with an actual generated
-reference. The main workspace also shows "Your order, on the record." with the
-saved item list, exact sales-package quantities and planned quantity/surplus,
-requested delivery date, item subtotal, source and manager-approval record.
-Check these against the cart you reviewed.
-
-"What happens next?" explains that the simulation stops here. No supplier
-delivery is scheduled and no supplier order, invoice or payment is created.
-The requested date is a recorded request, not a delivery booking. An actual
-purchase would need your authorized supplier ordering channel and contract.
-
-Click "Verify receipt". It should report that the saved receipt matches the
-recorded order. This is a read-only check: it should not create another order
-or consume more of the simulated spending allowance. You can use
-"Verify receipt again" to repeat that check.
-
-Reload the browser. The saved cart and its simulated receipt should reopen
-after sign-in if necessary. The reference should be unchanged. A receipt is
-not an invoice, a supplier confirmation or a guarantee of delivery.
-
-
-11. OPTIONAL OPERATOR CHECKS: TEXT INTERPRETER AND PRICE SOURCE
-
-These are optional technical checks, separate from ordinary ordering. Open
-"Demo tools" -> "Data & model settings", start a new request, then open
-"Demo settings". "Quotation source" offers "Live sponsor sandbox" or
-"Authored fixture prices & stock". Live mode reads challenge sandbox price
-and availability; confirmation remains our simulation. Existing saved carts
-keep their original source.
-
-The text-interpreter checkbox "Use NVIDIA for nonconfidential demo requests"
-is independent of the price/stock source. Typed-request interpretation defaults
-to the local parser, with this operator checkbox unchecked.
-This operator setting is for interpreting text requests. Uploaded images and
-camera photos use the automatic image reader described in section 13B instead.
-You can deliberately choose any of these combinations:
-
-  Rehearsal fixture + NVIDIA off: local parser, authored prices and stock.
-  Rehearsal fixture + NVIDIA on: hosted interpretation, authored prices/stock.
-  Live sandbox + NVIDIA off: local parser, live sandbox prices and stock.
-  Live sandbox + NVIDIA on: hosted interpretation and live sandbox lookups.
-
-Checking NVIDIA can make a hosted model request even with fixture prices.
-Some supported recipe turns use the local deterministic recipe planner. Do not
-assume that every result used NVIDIA simply because the checkbox was selected.
-Model-routing verification belongs in the technical evidence report; the
-ordinary response banner omits internal routing labels.
-
-Look for clear source labels. The fixture must never be presented as live.
-If a live service times out or returns an error, the application should show
-the error and preserve the existing saved cart. It must not quietly substitute
-successful-looking fixture data. Hosted services can be temporarily unavailable;
-record the error separately from a failure of the local rehearsal workflow.
-
-Start another "New request" to change an existing cart's source or interpreter.
-A source change should not silently alter an already reviewed quotation.
-
-
-12. CHECK HARD FAILURES IN THE TRUST SCENARIOS
-
-"Trust scenarios" preserves the focused shared milk-order demonstration. A
-private account is correctly blocked from this separate shared mandate; use
-Smart order in that private workspace, or switch through "Demo access" to the
-shared buyer code with the manager workspace field blank. The lab has its
-own requested litres, delivery date and evidence-source controls. Its typed
-quantity/date are authoritative for that demonstration.
-
-Try "A tempting shortcut": a cheaper option that fails the dietary requirement
-must be blocked. Try "Quantity unknown": unknown stock must not be treated as
-verified availability. Try "An untrusted instruction": supplier text must not
-change the purchasing rules or grant permission to place an order.
-
-"The milk runs out" demonstrates a controlled shortage and an eligible budget
-exception. These are explicitly authored failure scenarios, including when
-shown as an overlay on live sandbox evidence.
-
-Open "Decision recorder" to inspect the focused scenario's recorded checks.
-"Gateway API" is a technical reference; judges can assess the normal customer
-journey without using it.
-
-
-13. CHECK RELOAD, PHONE AND KEYBOARD USE
-
-Before confirming a small cart, reload the page. Its products, quantities,
-requirements and selections should survive. Sign out through the profile
-window and sign back in; the saved cart should reopen in the permitted role.
-
-On a phone or a narrow browser window:
-
-  - Open the navigation using its menu button.
-  - Read and edit the request without horizontal page scrolling.
-  - Compare candidate details and reach the shopping cart.
-  - Check quantity, budget, date, approval and confirmation controls.
-  - Check that long product names and error messages fit.
-
-With a keyboard:
-
-  - Press Tab to move through links, inputs and buttons.
-  - Check that the focused control is visibly outlined.
-  - Use Enter or Space to activate the appropriate control.
-  - Complete sign-in and a small order review without relying on a mouse.
-  - Check that errors are readable and that controls have meaningful labels.
-  - Open "Filters" and "Product details" with the keyboard; remove an active
-    filter and use "Reset filters" without depending on color or a mouse.
-  - Check the mobile profile button is announced as "Account and sign-in".
-
-
-13A. TYPE OR RECORD A VOICE REQUEST
-
-In Smart order, "Type a message" focuses the request field. For speech,
-click "Voice input". While permission is pending, look for
-"Allow microphone access in your browser..." and "Cancel". Repeated activation
-must not start multiple recordings. Cancel must release the ordering controls;
-a late permission response must not silently begin recording.
-
-Allow microphone access only when
-you intend to record. Say a short demonstration request such as:
-
-  I need twenty litres of lactose-free milk and five kilograms of butter
-  delivered by Monday.
-
-Click "Stop & transcribe". The recording automatically stops after 30 seconds.
-"Cancel" discards the current recording. After stopping normally,
-the clip is sent to this application's server for local Whisper transcription.
-It is not sent to an external speech provider by the default implementation.
-
-Inspect "Review extracted text" and "Editable extracted text".
-Correct product names, numbers, units and dietary wording. Read any uncertainty
-messages. Click "Add to request" only after review. It adds editable
-text to the request; it must not build or confirm a cart automatically.
-
-During recording, extraction and unreviewed extracted text, "Build cart" or
-"Update cart" stays unavailable. While reviewing text, "Voice input", "Upload
-image" and "Take a photo" also stay unavailable so they cannot replace it.
-Typing and editing stay available. Use "Add to request", or the close button
-labelled "Discard extracted text", to finish that review and release ordering.
-
-You can combine it with typed text, then click "Build cart" or "Update cart"
-yourself. There is no audio-file upload control. The microphone still uses
-the retained audio-processing API. A declined microphone permission must give
-a useful message and leave typing, image upload and photo capture available.
-
-
-13B. READ A PHOTO OR PRINTED SHOPPING LIST
-
-Click "Upload image" and choose one clear JPEG or PNG of a nonconfidential
-example shopping list. The image reader is selected automatically; there is
-no provider selector or per-image checkbox. "Input privacy" explains that an
-external service may process images. Use only nonconfidential demonstration
-content; do not upload credentials, customer names, contracts or private
-Valio Aimo material.
-
-The original file must be nonempty and no larger than 5 MB. Large-resolution
-phone images within that byte limit are resized proportionally in the browser
-to at most 1600 pixels on the longest side, with camera orientation respected.
-A fresh image removes the original filename and metadata before upload. The
-server keeps its independent image-validation defenses for direct requests.
-
-Check the editable extracted text against the image. Fix uncertain characters,
-quantities and units before "Add to request". A product photo
-without an explicit purchasing quantity must not cause an invented quantity.
-A blank, corrupt or unsupported file should explain the problem, not create
-an order.
-
-Try keeping a short typed request in the composer before uploading the image.
-While "Reading your shopping list..." is shown, its text must remain intact
-and Build/Update must be unavailable. The same guard remains while extracted
-text awaits Add or Discard; choosing Add combines it with the existing request.
-
-Image reading uses the configured automatic vision service; a temporary
-provider failure may use the local OCR fallback. No customer model decision
-is required. Uploaded media is processed for text extraction, not saved as a
-workspace attachment. Text you choose to add becomes part of the purchasing
-request only when you submit it. Review names, quantities and units yourself;
-image reading does not establish prices, inventory or dietary safety.
-
-
-13C. TAKE A PHOTO
-
-Click "Take a photo". On a supported phone, use the native camera. On desktop,
-allow camera access, inspect the preview and click "Capture photo". While
-waiting for permission, the app says "Allow camera access in your browser to
-continue." "Cancel" and the close button must release the pending state.
-With keyboard focus inside the camera preview, Escape should close it too.
-Closing, leaving the screen or unmounting must stop any camera stream, including
-a late permission grant. A late photo callback after Cancel must not upload it.
-
-Read and correct the same "Editable extracted text" used for uploaded images,
-then explicitly "Add to request". Capture must not build or confirm a cart.
-Declining permission or having no camera must give useful recovery through
-"Upload image" or typing. Photos use the same automatic image reader and
-proportional resizing as uploaded images. The 5 MB original-file limit still
-applies; a phone photo must not be rejected merely because its original pixel
-count exceeds the server's direct-request limit.
-
-The owner confirmed the physical phone/photo flow on the final public release:
-the same photo below 5 MB worked and its text was editable. The seven grouped
-automated camera checks separately use fake streams and canvas callbacks.
-Neither a single owner retest nor those unit checks establishes support or
-accuracy for every phone, webcam, browser, permission dialog or handwriting.
-
-
-
-14. FINAL CHECKLIST FOR YOUR REVIEW
-
-[ ] I understood how to begin without a tutorial.
-[ ] The buyer and approver are clearly different identities.
-[ ] Private registration/login and Remember Me behave as described.
-[ ] Sign out revokes the current session and another workspace stays isolated.
-[ ] A mixed request produced separate product requirements.
-[ ] Quantities, pack rounding and surplus were understandable.
-[ ] Product evidence exposed supplied ingredient, storage and source details.
-[ ] A follow-up preserved unrelated products and hard requirements.
-[ ] I could compare, replace, search for and remove products.
-[ ] Products showed result counts, filters and working pagination.
-[ ] Active filters stayed visible; saved mandatory restrictions survived reset.
-[ ] Products search/page/selection context survived navigation away and back.
-[ ] History open/reuse/archive/restore/removal persisted appropriately.
-[ ] Sorting/filtering use actual fields, retain selection and offer counts/reset.
-[ ] Saved soft preferences persist and affect only new requests as chosen.
-[ ] A low budget blocked confirmation and could be corrected explicitly.
-[ ] Delivery dates, stock gaps and quote expiry were clearly explained.
-[ ] The 500-person dietary overlap was handled without double counting.
-[ ] A missing overlap could be supplied through its direct input control.
-[ ] A saved editable meal plan transferred into a dated quoted basket.
-[ ] Unsupported dietary/product evidence remained a visible conflict.
-[ ] Exact manager approval could not override a hard-rule failure.
-[ ] Changes invalidated approval where required.
-[ ] Confirmation produced a clearly simulated, generated receipt.
-[ ] Its saved items, requested date, approval and next steps were clear.
-[ ] Receipt verification did not create another order.
-[ ] Reload preserved the saved cart and receipt.
-[ ] Live and fixture evidence were labelled accurately.
-[ ] Optional Demo text-interpreter settings stayed separate from image reading.
-[ ] A live service failure was shown honestly.
-[ ] Type a message, Voice input, Upload image and Take a photo were usable.
-[ ] The audio-file upload option was absent and live microphone input remained.
-[ ] Voice, uploaded-image and camera text stayed editable before adding/building.
-[ ] Build/Update stayed blocked during media work and pending Add/Discard review.
-[ ] Pending microphone/camera Cancel prevented late or duplicate capture.
-[ ] Microphone denial and corrupt/large uploads had useful recovery.
-[ ] Camera denial/unavailability and preview cancellation had useful recovery.
-[ ] Images were read automatically without a provider selector or checkbox.
-[ ] Input privacy explained external processing and nonconfidential demo use.
-[ ] High-resolution JPEG/PNG under 5 MB resized and remained editable.
-[ ] Originals over 5 MB were rejected without leaving a stuck loading state.
-[ ] Phone layout and keyboard controls were usable.
-
-For each problem, record the request you entered, the source mode, the button
-you clicked, what you expected and what appeared. A screenshot can help, but
-exclude access codes and any other private credentials.
-
-
-15. CURRENT LIMITATIONS TO KEEP IN MIND
-
-This is a procurement prototype using restricted challenge data and synthetic
-customer identities. The local parser supports structured English shopping
-requests and a specific bolognese example; it is not an unrestricted expert on
-every dish, language or purchasing specification.
-
-Recipes are illustrative until reviewed by the kitchen. Declared dietary
-claims do not establish complete allergy safety or safe preparation. Lactose-
-free milk can still contain milk allergens. Missing or contradictory product
-facts should prevent automatic acceptance rather than be invented.
-
-The quotation covers tax-inclusive items. Shipping/service charges, real
-customer contracts, credit checks, invoices, payments and real supplier order
-submission are not integrated. Historical delivered-quantity reliability is
-not an on-time-delivery guarantee. Public product listing is not proof of
-current orderable stock.
-
-Live service availability and prices may change. Fixture prices with the local
-typed-request parser provide a repeatable check of deterministic validation.
-The public-site microphone worked correctly in one user-reported accent test.
-Wider voice accuracy, noisy kitchens and real camera/handwriting coverage still
-need representative checks; a clean synthetic benchmark does not establish it. The
-workspace's simulated spending allowance and policy expiry can affect later tests.
-
-No final Junction project submission is performed by these website checks.
-
-Historical persistence check: 13 checks passed after the earlier redeployment.
-The same remembered session, account login, preferences, simulated spending and
-three saved receipts/approval records recovered. A private backup passed SQLite
-integrity; this check created no new orders.
+Record request, role, product/unit, button, expected result and actual result for
+any issue. Screenshots must exclude passwords, codes and private customer data.
+Do not submit the Junction entry, purchase anything or activate paid resources.

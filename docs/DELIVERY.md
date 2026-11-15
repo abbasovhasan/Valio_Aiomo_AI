@@ -1,5 +1,7 @@
 # A4TB · Valio Aimo — delivery record
 
+**Current release —15 November 2026:** public **index-Bj9bRlqq.js /index-BeA19jUu.css**, **360 backend tests /113.48s**, **62 frontend checks**, and **14 protected deployment/continuity checks /91.833s** passed. Five registered-QA receipts, remembered private sessions/preferences/password/spend and the original shared receipt/spend survived; zero new orders. Scoped hosted desktop/mobile browser checks passed. Implementation `b166ca6` is scanned and pushed to the private `codex/aimo-order-desk` branch. See [PRODUCT_REFINEMENT_REPORT.md](PRODUCT_REFINEMENT_REPORT.md) for current scope, local browser evidence and release gates. **The sections below preserve the historical 14 November B4 delivery; their current/final wording refers to that earlier snapshot.**
+
 Public entry point: **[A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site)**. Sites supplies the branded HTTPS origin; Modal runs the React/FastAPI application and private persistent SQLite volumes. Buyer and approver codes remain private. All confirmations are simulated. No real purchase, stock reservation, invoice, payment or final Junction submission is authorized or claimed.
 
 ## Reviewer entry points

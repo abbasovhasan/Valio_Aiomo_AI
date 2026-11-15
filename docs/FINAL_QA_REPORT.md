@@ -1,5 +1,7 @@
 # Final QA continuation — Valio Aimo
 
+**Current release —15 November 2026:** public **index-Bj9bRlqq.js /index-BeA19jUu.css**, **360 backend tests /113.48s**, **62 frontend checks**, and **14 deployment/continuity checks /91.833s** passed. Protected backup integrity, five registered-QA receipts, private sessions/preferences/password/spend and original shared receipt/spend were preserved; zero new orders. Scoped hosted desktop/mobile browser checks passed. Implementation `b166ca6` is scanned and pushed to the private `codex/aimo-order-desk` branch. See [PRODUCT_REFINEMENT_REPORT.md](PRODUCT_REFINEMENT_REPORT.md). **All sections below are the historical 14 November B4 QA record, not the current asset/test count or source handoff.**
+
 Snapshot: 14 November 2026, Europe/Helsinki. The release coordinator recorded **285 backend tests passing in 83.21s**, frontend builds and **7 microphone /7 camera /8 image-normalization checks**. Catalog/history, hosted image/owner retests and Bk rendering/visual checks passed. Final **`index-B4p90PsT.js`** adds bounded support for every actual long catalog name; its deployment, **12 continuity checks** and hosted 155-character selection/follow-up passed. Media/reconciliation components are unchanged. Implementation `829207f` was reviewed, scanned and pushed to private `codex/aimo-order-desk`.
 
 ## Bugs and implemented fixes

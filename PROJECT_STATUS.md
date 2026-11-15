@@ -1,6 +1,10 @@
 # A4TB · Valio Aimo — project status
 
-14 November 2026, Europe/Helsinki. Open **[A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site)**. Public Sites HTTPS proxies the React/FastAPI application on Modal. Source, catalog and credentials remain private. All orders are simulated.
+15 November 2026, Europe/Helsinki. Open **[A4TB · Valio Aimo](https://a4tb-valio-aimo.cozyhawthorn4.chatgpt.site)**. Public Sites HTTPS proxies React/FastAPI on Modal. Current public asset: **index-Bj9bRlqq.js /index-BeA19jUu.css**. Source, catalog and credentials remain private. All orders are simulated.
+
+Current refinement adds isolated Buyer/Approver cards and queue/decline, the shared desktop details drawer/mobile sheet, manual two/three comparison, independent page filters/sorts, generic CLT/fractional-KG semantics, distinct budget/purchasing-policy explanations and custom meal ingredients with protected cart handoff. **360 backend tests /113.48s** and **62 frontend grouped checks** passed. Deployment recovery passed **14 checks /91.833s**, including protected-backup integrity, five registered-QA receipts, private remembered sessions/preferences/passwords/spending and the original shared receipt/spend; **zero new orders**. The controlled demo flag is explicitly enabled. Scoped hosted desktop/mobile, role/reload/logout and comparison checks passed. Implementation `b166ca6` is scanned and pushed to private `codex/aimo-order-desk`. See [current engineering report](docs/PRODUCT_REFINEMENT_REPORT.md) and [checking guide](docs/WEBSITE_CHECK_GUIDE.txt).
+
+The detailed B4/285-test delivery and verification below records the **14 November historical release**; its asset/test count and source SHA do not describe the current refinement.
 
 ## Delivered
 
